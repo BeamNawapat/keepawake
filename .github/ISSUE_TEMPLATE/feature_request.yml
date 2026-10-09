@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a change, or ask for a new agent to be detected
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like keepawake to do?
+  - type: markdown
+    attributes:
+      value: |
+        ## New agent
+        Fill in the next three fields only if you want an agent added to detection.
+  - type: input
+    id: binary
+    attributes:
+      label: Binary name
+      placeholder: codex
+  - type: input
+    id: install
+    attributes:
+      label: How it is installed
+      placeholder: npm i -g @openai/codex, brew, a .dmg
+  - type: textarea
+    id: ps
+    attributes:
+      label: Process lines while the agent is running
+      description: >
+        Run `ps -axo pid=,comm=,args=` (macOS/Linux) and paste only the lines for the agent.
+        Remove tokens and personal paths.
+      render: shell

@@ -1,0 +1,23 @@
+// `ps -axo pid=,args=` on macOS. Command lines trimmed to the first flags: the real ones can carry secrets.
+ 3445 /Users/dev/.local/bin/claude --output-format stream-json --verbose
+52497 claude --resume
+11657 /Applications/Claude.app/Contents/MacOS/Claude
+// inferred
+13001 /Users/dev/.local/share/claude/versions/2.1.295 --resume
+20001 codex
+20002 node /Users/dev/.nvm/versions/node/v22.14.0/lib/node_modules/@google/gemini-cli/dist/index.js
+20003 node /Users/dev/.nvm/versions/node/v22.14.0/lib/node_modules/@openai/codex/bin/codex.js
+20004 /Applications/Cursor.app/Contents/MacOS/Cursor
+20005 /Users/dev/.local/share/cursor-agent/versions/2026.01.01/node /Users/dev/.local/share/cursor-agent/versions/2026.01.01/index.js
+20006 opencode
+20007 /opt/homebrew/bin/python3.12 /Users/dev/.local/bin/aider --model sonnet
+20008 copilot
+20009 /Applications/Kiro.app/Contents/MacOS/Kiro
+20010 kiro-cli chat
+20011 amp
+// decoys
+30001 grep claude
+30002 /bin/bash /usr/local/bin/keepawake-claude start
+30003 node /Users/dev/projects/something-else/server.js
+30004 python3
+30005 /Users/dev/.nvm/versions/node/v22.14.0/bin/node /Users/dev/projects/keepawake/dist/cli.js __daemon

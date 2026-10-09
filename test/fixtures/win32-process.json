@@ -1,0 +1,6 @@
+[
+  {"ProcessId":4,"ParentProcessId":0,"Name":"System","ExecutablePath":null,"CommandLine":null},
+  {"ProcessId":1200,"ParentProcessId":900,"Name":"claude.exe","ExecutablePath":"C:\\Users\\beam\\.local\\bin\\claude.exe","CommandLine":"\"C:\\Users\\beam\\.local\\bin\\claude.exe\" --resume"},
+  {"ProcessId":3400,"ParentProcessId":1,"Name":"Claude.exe","ExecutablePath":"C:\\Users\\beam\\AppData\\Local\\AnthropicClaude\\app-1.0.0\\Claude.exe","CommandLine":"\"C:\\Users\\beam\\AppData\\Local\\AnthropicClaude\\app-1.0.0\\Claude.exe\""},
+  {"ProcessId":5100,"ParentProcessId":900,"Name":"node.exe","ExecutablePath":"C:\\Program Files\\nodejs\\node.exe","CommandLine":"node C:\\x\\keepawake\\dist\\cli.js __daemon"}
+]

@@ -1,0 +1,25 @@
+// `ps -axo pid=,ppid=,comm=` on macOS. Lines starting with // are comments.
+// Real lines were captured from a Mac and the home directory scrubbed to /Users/dev.
+ 3445 25257 /Users/dev/.local/bin/claude
+52497 53580 claude
+11657     1 /Applications/Claude.app/Contents/MacOS/Claude
+// inferred: native installer layout (~/.local/share/claude/versions/<ver>), comm is the version file
+13001 13000 /Users/dev/.local/share/claude/versions/2.1.295
+// inferred below: tool not running on the capture machine
+20001 20000 codex
+20002 20000 node
+20003 20000 node
+20004 1 /Applications/Cursor.app/Contents/MacOS/Cursor
+20005 20000 /Users/dev/.local/bin/cursor-agent
+20006 20000 opencode
+20007 20000 /opt/homebrew/bin/python3.12
+20008 20000 copilot
+20009 1 /Applications/Kiro.app/Contents/MacOS/Kiro
+20010 20000 kiro-cli
+20011 20000 amp
+// decoys: must never match
+30001 30000 grep
+30002 30000 /bin/bash
+30003 30000 node
+30004 30000 python3
+30005 30000 /Users/dev/.nvm/versions/node/v22.14.0/bin/node
