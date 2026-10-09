@@ -61,6 +61,11 @@ jobs:
         if: always()
         shell: bash
         run: node dist/cli.js stop
+      # The daemon only explains a failure in its log, which lives in KEEPAWAKE_HOME.
+      - name: Show daemon log
+        if: always()
+        shell: bash
+        run: cat "$KEEPAWAKE_HOME/keepawake.log" || true
       - run: npm pack --dry-run
 
   node18:
