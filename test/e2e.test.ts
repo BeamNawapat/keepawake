@@ -58,11 +58,11 @@ describe("cli basics", () => {
 });
 
 // On Linux the daemon exits on purpose when logind refuses the inhibitor (CI runners
-// often have no session bus), so only run the lifecycle test where an inhibit works.
+// deny "sleep" through polkit), so probe the exact inhibitor the daemon takes.
 function linuxCanInhibit(): boolean {
   const list = spawnSync("systemd-inhibit", ["--list"], { encoding: "utf8", timeout: 5000 });
   if (list.status !== 0) return false;
-  const probe = spawnSync("systemd-inhibit", ["--what=idle", "--who=keepawake-test", "--why=probe", "true"], {
+  const probe = spawnSync("systemd-inhibit", ["--what=idle:sleep", "--who=keepawake-test", "--why=probe", "true"], {
     encoding: "utf8",
     timeout: 5000,
   });

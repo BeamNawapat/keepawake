@@ -145,6 +145,7 @@ A small state machine decides what to do on each poll: acquire the lock, release
 - **Windows 11 24H2 and `--hotspot`.** `netsh wlan` may need Location services turned on, and the profile must already be saved.
 - **Laptop still sleeps on Windows.** Modern Standby can drop power regardless of the lid action. Check `powercfg /requests`.
 - **Auto-start stopped working after switching Node.** The startup entry stores the path to `node`. After changing nvm, Volta or fnm versions, run `keepawake setup-auto` again.
+- **Linux: `Failed to inhibit: Access denied`.** polkit refused the `sleep` inhibitor for your session. This happens on headless or CI machines and with some polkit policies. Check `systemd-inhibit --what=idle:sleep --who=test --why=test true`.
 - **Something looks stuck.** Run `keepawake doctor`. Add `--fix` to clean up.
 
 ## Migration from keepawake-claude
