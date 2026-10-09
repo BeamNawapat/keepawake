@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -87,6 +87,12 @@ describe.skipIf(!canRun || process.env.CI === "skip-e2e")("daemon lifecycle", ()
       for (let i = 0; i < 20 && st.holderPid === null; i++) {
         spawnSync("sleep", ["0.25"]);
         st = JSON.parse(kw(home, "status", "--json").out) as St;
+      }
+      if (!st.running) {
+        // The daemon explains its exit only in the log, which CI cannot see otherwise.
+        const logFile = join(home, "keepawake.log");
+        console.log("daemon log:\n" + (existsSync(logFile) ? readFileSync(logFile, "utf8") : "(no log file)"));
+        console.log("start output:\n" + s.out + s.err);
       }
       expect(st.running).toBe(true);
       expect(st.options.always).toBe(true);
