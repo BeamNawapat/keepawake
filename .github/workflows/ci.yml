@@ -19,7 +19,7 @@ jobs:
       # Keeps the smoke daemon's pid/state/log out of the runner's real home.
       KEEPAWAKE_HOME: ${{ github.workspace }}/.ci-keepawake-home
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -44,7 +44,7 @@ jobs:
   node18:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
