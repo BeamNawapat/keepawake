@@ -38,7 +38,7 @@ jobs:
           node dist/cli.js status --json
       # Windows has no pmset/caffeinate to inspect, so ask the OS which processes hold a
       # SYSTEM power request. Without this a holder that silently failed to start would pass.
-      - name: Verify power request (Windows)
+      - name: Wait for holder (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -48,8 +48,15 @@ jobs:
             sleep 1
           done
           if [ "$ok" != 1 ]; then echo "holderPid never became a number"; exit 1; fi
-          powercfg /requests | tee powercfg.txt
-          grep -A3 'SYSTEM:' powercfg.txt | grep -qi powershell
+      # pwsh, not bash: Git Bash rewrites "/requests" into a path and powercfg rejects it.
+      - name: Verify power request (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = powercfg /requests | Out-String
+          Write-Host $out
+          $m = [regex]::Match($out, 'SYSTEM:\s*\r?\n((?:.*\r?\n){0,3})')
+          if ($m.Groups[1].Value -notmatch 'powershell') { Write-Error 'no powershell SYSTEM power request'; exit 1 }
       - name: Stop daemon
         if: always()
         shell: bash

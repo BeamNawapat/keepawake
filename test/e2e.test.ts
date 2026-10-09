@@ -57,7 +57,22 @@ describe("cli basics", () => {
   });
 });
 
-const canRun = process.platform === "win32" || existsSync("/usr/bin/caffeinate") || process.platform === "linux";
+// On Linux the daemon exits on purpose when logind refuses the inhibitor (CI runners
+// often have no session bus), so only run the lifecycle test where an inhibit works.
+function linuxCanInhibit(): boolean {
+  const list = spawnSync("systemd-inhibit", ["--list"], { encoding: "utf8", timeout: 5000 });
+  if (list.status !== 0) return false;
+  const probe = spawnSync("systemd-inhibit", ["--what=idle", "--who=keepawake-test", "--why=probe", "true"], {
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  return probe.status === 0;
+}
+
+const canRun =
+  process.platform === "win32" ||
+  (process.platform === "darwin" && existsSync("/usr/bin/caffeinate")) ||
+  (process.platform === "linux" && linuxCanInhibit());
 
 describe.skipIf(!canRun || process.env.CI === "skip-e2e")("daemon lifecycle", () => {
   test("start --always -d, status --json, stop", () => {
