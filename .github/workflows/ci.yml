@@ -25,8 +25,9 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun test
+      # Build first so the stop step below always has dist/ even when a test fails.
       - run: bun run build
+      - run: bun test
       - name: Smoke
         shell: bash
         run: |

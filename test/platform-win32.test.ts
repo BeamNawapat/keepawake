@@ -279,11 +279,11 @@ describe("isAliveWin32", () => {
   const key = (pid: number) => `tasklist /FI PID eq ${pid} /FO CSV /NH`;
   test("running node.exe", async () => {
     const exec = fakeExec({ [key(42)]: '"node.exe","42","Console","1","40,000 K"\r\n' });
-    expect(await isAliveWin32(exec, 42)).toBe(true);
+    expect(await isAliveWin32(exec, 42, "node.exe")).toBe(true);
   });
   test("pid reused by another image", async () => {
     const exec = fakeExec({ [key(42)]: '"chrome.exe","42","Console","1","40,000 K"' });
-    expect(await isAliveWin32(exec, 42)).toBe(false);
+    expect(await isAliveWin32(exec, 42, "node.exe")).toBe(false);
   });
   test("no match", async () => {
     const exec = fakeExec({ [key(42)]: "INFO: No tasks are running which match the specified criteria." });
