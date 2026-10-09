@@ -17,7 +17,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       # Keeps the smoke daemon's pid/state/log out of the runner's real home.
-      KEEPAWAKE_HOME: ${{ runner.temp }}/keepawake-home
+      KEEPAWAKE_HOME: ${{ github.workspace }}/.ci-keepawake-home
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
