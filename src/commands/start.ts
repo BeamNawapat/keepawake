@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { closeSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import type { Options } from "../core/config.js";
 import { GLYPH } from "../core/ui.js";
 import { readState, writeState, type State } from "../core/state.js";
@@ -67,14 +67,34 @@ export function acquireStartLock(paths: Paths): (() => void) | null {
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
       if (lockHolderAlive(paths.lock)) return null;
+      // Two starters can both see the same dead lock. rename() succeeds for only one of them
+      // (the loser gets ENOENT), so only the winner retries; a plain unlink would let both
+      // succeed and the second could delete the lock the first had just created.
+      const stale = `${paths.lock}.${process.pid}.stale`;
       try {
-        unlinkSync(paths.lock);
+        renameSync(paths.lock, stale);
       } catch {
-        // someone else removed it first; the retry decides who wins
+        return null;
+      }
+      try {
+        unlinkSync(stale);
+      } catch {
+        // already gone
       }
     }
   }
   return null;
+}
+
+/** Pid of another live start holding start.lock, or null. stop and doctor back off while one runs. */
+export function startInProgress(paths: Paths): number | null {
+  let pid = Number.NaN;
+  try {
+    pid = Number(readFileSync(paths.lock, "utf8").trim());
+  } catch {
+    return null;
+  }
+  return Number.isInteger(pid) && pid > 0 && pid !== process.pid && pidExists(pid) ? pid : null;
 }
 
 /** Returns the process exit code. */

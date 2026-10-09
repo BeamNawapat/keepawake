@@ -1,5 +1,6 @@
 import { parseSleepDisabled } from "../platform/darwin/lid.js";
 import { readState } from "../core/state.js";
+import { startInProgress } from "./start.js";
 import { reconcile, type Ctx } from "./common.js";
 
 interface Finding {
@@ -10,6 +11,13 @@ interface Finding {
 export async function doctor(ctx: Ctx, opts: { fix: boolean; json: boolean }): Promise<number> {
   const { ui, paths } = ctx;
   const platform = ctx.makePlatform(false);
+
+  const starting = startInProgress(paths);
+  if (starting !== null) {
+    ui.err(`a start is in progress (pid ${starting}), try again in a moment`);
+    return 1;
+  }
+
   const findings: Finding[] = [];
   const add = (level: Finding["level"], message: string) => findings.push({ level, message });
 

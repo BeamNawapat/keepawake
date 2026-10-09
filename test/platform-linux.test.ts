@@ -52,12 +52,12 @@ describe("linux power", () => {
   test("release verifies argv, sends SIGTERM and tolerates ESRCH", async () => {
     const sent: Array<[number, string]> = [];
     const ok = createLinuxPower(fakeExec({ [PS]: OURS }), { kill: (p, s) => void sent.push([p, s]) });
-    expect(await ok.release({ pid: 7, ownerPid: 1 })).toBe(true);
+    expect(await ok.release({ pid: 7, ownerPid: 1 })).toBe("released");
     expect(sent).toEqual([[7, "SIGTERM"]]);
     const gone = createLinuxPower(fakeExec({ [PS]: OURS }), {
       kill: () => { throw Object.assign(new Error("x"), { code: "ESRCH" }); },
     });
-    expect(await gone.release({ pid: 7, ownerPid: 1 })).toBe(true);
+    expect(await gone.release({ pid: 7, ownerPid: 1 })).toBe("released");
     const denied = createLinuxPower(fakeExec({ [PS]: OURS }), {
       kill: () => { throw Object.assign(new Error("x"), { code: "EPERM" }); },
     });
@@ -68,11 +68,11 @@ describe("linux power", () => {
     const sent: number[] = [];
     const kill = (p: number) => void sent.push(p);
     const reused = createLinuxPower(fakeExec({ [PS]: "/usr/bin/vim notes.txt\n" }), { kill });
-    expect(await reused.release({ pid: 7, ownerPid: 1 })).toBe(false);
+    expect(await reused.release({ pid: 7, ownerPid: 1 })).toBe("skipped");
     const foreignInhibit = createLinuxPower(fakeExec({ [PS]: "systemd-inhibit --who=other sleep 5\n" }), { kill });
-    expect(await foreignInhibit.release({ pid: 7, ownerPid: 1 })).toBe(false);
+    expect(await foreignInhibit.release({ pid: 7, ownerPid: 1 })).toBe("skipped");
     const gone = createLinuxPower(fakeExec({ [PS]: { code: 1 } }), { kill });
-    expect(await gone.release({ pid: 7, ownerPid: 1 })).toBe(false);
+    expect(await gone.release({ pid: 7, ownerPid: 1 })).toBe("gone");
     expect(sent).toEqual([]);
   });
 });

@@ -52,7 +52,8 @@ function sameFile(token: string, cli: string): boolean {
 export function matchesArgv(args: string | undefined, expect: AliveExpect): boolean {
   if (args === undefined || expect.cli === "") return false;
   if (expect.mode === "daemon") return args.includes("__daemon") && args.includes(expect.cli);
-  if (!args.includes(" start")) return false;
+  // `restart` runs the same foreground monitor as `start`, so both must count as alive.
+  if (!/\s(re)?start(\s|$)/.test(args)) return false;
   return args.includes(expect.cli) || args.split(/\s+/).some((t) => sameFile(t, expect.cli));
 }
 

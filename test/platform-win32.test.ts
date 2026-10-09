@@ -67,18 +67,18 @@ describe("power holder", () => {
     expect(holder).toEqual({ pid: 777 });
     expect(spawned!.cmd).toBe("powershell.exe");
     expect(decode(spawned!.args.at(-1)!)).toContain("2147483651");
-    expect(await power.release({ pid: 777, ownerPid: 1 })).toBe(true);
+    expect(await power.release({ pid: 777, ownerPid: 1 })).toBe("released");
     expect(child.ended).toBe(true);
     expect(exec.calls).toEqual(["powershell.exe <cim>", "taskkill /PID 777 /T /F"]);
   });
 
   test("release skips taskkill for a reused pid, a foreign powershell and a vanished pid", async () => {
     const reused = withCim(fakeExec(), { Name: "chrome.exe", CommandLine: "chrome.exe --type=gpu" });
-    expect(await createWin32Power(reused).release({ pid: 777, ownerPid: 1 })).toBe(false);
+    expect(await createWin32Power(reused).release({ pid: 777, ownerPid: 1 })).toBe("skipped");
     const foreign = withCim(fakeExec(), { Name: "powershell.exe", CommandLine: "powershell.exe -EncodedCommand AAAA" });
-    expect(await createWin32Power(foreign).release({ pid: 777, ownerPid: 1 })).toBe(false);
+    expect(await createWin32Power(foreign).release({ pid: 777, ownerPid: 1 })).toBe("skipped");
     const gone = withCim(fakeExec(), null);
-    expect(await createWin32Power(gone).release({ pid: 777, ownerPid: 1 })).toBe(false);
+    expect(await createWin32Power(gone).release({ pid: 777, ownerPid: 1 })).toBe("gone");
     for (const e of [reused, foreign, gone]) expect(e.calls.some((c) => c.startsWith("taskkill"))).toBe(false);
   });
 
@@ -332,6 +332,8 @@ describe("isAliveWin32", () => {
   test("foreground: cli path plus ' start'", async () => {
     const ok = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} start --always` });
     expect(await isAliveWin32(ok, 42, fg, "node.exe")).toBe(true);
+    const re = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} restart --always` });
+    expect(await isAliveWin32(re, 42, fg, "node.exe")).toBe(true);
     const no = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} status` });
     expect(await isAliveWin32(no, 42, fg, "node.exe")).toBe(false);
   });

@@ -43,7 +43,7 @@ export function argvMatches(commandLine: string, expect: AliveExpect): boolean {
   if (!cli) return false;
   return expect.mode === "daemon"
     ? line.includes("__daemon") && line.includes(cli)
-    : line.includes(cli) && line.includes(" start");
+    : line.includes(cli) && /\s(re)?start(\s|$)/.test(line);
 }
 
 /**
@@ -69,6 +69,7 @@ export async function isAliveWin32(
     }
   }
   if (!imageOk) return false;
+  if (!expect.cli) return false;
   const row = await queryWin32Process(exec, pid);
   return row !== null && argvMatches(row.commandLine, expect);
 }

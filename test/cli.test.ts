@@ -69,7 +69,7 @@ describe("reconcile", () => {
     const restored: unknown[] = [];
     const platform = {
       isAlive: async (_pid: number, expect: unknown) => (aliveCalls.push(expect), alive),
-      power: { release: async (h: { pid: number; ownerPid: number }) => (released.push(h), true) },
+      power: { release: async (h: { pid: number; ownerPid: number }) => (released.push(h), "released" as const) },
       lid: {
         restore: async (s: unknown) => void restored.push(s),
       },
@@ -139,6 +139,13 @@ describe("isAlive argv matching", () => {
     expect(matchesArgv("node /usr/lib/npm/bin/npm-cli.js start", f)).toBe(false);
   });
 
+  test("foreground run launched by restart counts as alive", () => {
+    const f = { mode: "foreground", cli } as const;
+    expect(matchesArgv(`node ${cli} restart --always`, f)).toBe(true);
+    expect(matchesArgv(`node ${cli} restart`, f)).toBe(true);
+    expect(matchesArgv(`node ${cli} restarted`, f)).toBe(false);
+  });
+
   test("unknown argv is not ours", () => {
     expect(matchesArgv(undefined, { mode: "daemon", cli })).toBe(false);
     expect(matchesArgv(undefined, { mode: "foreground", cli })).toBe(false);
@@ -154,7 +161,7 @@ describe("start lock and ordering", () => {
     const platform = {
       isAlive: async () => false,
       privilege: { isElevated: async () => true },
-      power: { release: async () => true },
+      power: { release: async () => "released" as const },
       lid: {
         snapshot: async () => (events.push("snapshot"), { kind: "darwin", sleepDisabled: "0" }),
         set: async () => {

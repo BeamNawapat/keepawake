@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { basename } from "node:path";
 import type { Exec } from "../../ports/exec.js";
-import type { Holder, HolderOptions, PowerPort } from "../../ports/power.js";
+import type { Holder, HolderOptions, PowerPort, ReleaseResult } from "../../ports/power.js";
 import { UnsupportedError } from "./errors.js";
 
 /** Starts a long-lived helper and resolves with its pid once it exists. */
@@ -36,7 +36,10 @@ const nodeSpawnHolder: SpawnHolder = (cmd, args) =>
           reject(new Error(stderr.trim() || `systemd-inhibit exited (code ${child.exitCode ?? child.signalCode})`));
           return;
         }
-        child.stderr!.destroy();
+        // Destroying the pipe would make a later stderr write from systemd-inhibit/sleep
+        // raise SIGPIPE and kill the holder, so keep draining it for the process lifetime.
+        child.stderr!.removeAllListeners("data");
+        child.stderr!.on("data", () => {});
         child.unref();
         resolve({ pid: child.pid! });
       }, SETTLE_MS);
@@ -74,19 +77,19 @@ export function createLinuxPower(exec: Exec, options: LinuxPowerOptions = {}): P
         throw new UnsupportedError(`could not start systemd-inhibit: ${(e as Error).message}`);
       }
     },
-    async release(holder: { pid: number; ownerPid: number }) {
+    async release(holder: { pid: number; ownerPid: number }): Promise<ReleaseResult> {
       // state.json can outlive a reboot, so the pid may belong to something else by now.
       const r = await exec.run("ps", ["-p", String(holder.pid), "-o", "args="], { timeoutMs: 5000 });
-      if (r.code !== 0) return false;
+      if (r.code !== 0) return "gone";
       const argv = r.stdout.trim().split(/\s+/);
-      if (basename(argv[0] ?? "") !== "systemd-inhibit" || !argv.includes("--who=keepawake")) return false;
+      if (basename(argv[0] ?? "") !== "systemd-inhibit" || !argv.includes("--who=keepawake")) return "skipped";
       try {
         kill(holder.pid, "SIGTERM");
       } catch (e) {
         // Already gone is the goal state.
         if ((e as NodeJS.ErrnoException).code !== "ESRCH") throw e;
       }
-      return true;
+      return "released";
     },
   };
 }

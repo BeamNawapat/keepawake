@@ -33,6 +33,9 @@ function isState(v: unknown): v is State {
   return (
     s.version === 1 &&
     Number.isInteger(s.pid) &&
+    // State from older versions has no cli; treating it as absent lets reconcile handle it as stale.
+    typeof s.cli === "string" &&
+    (s.holderPid === null || (Number.isInteger(s.holderPid) && (s.holderPid as number) > 0)) &&
     typeof s.startedAt === "string" &&
     (s.mode === "foreground" || s.mode === "daemon") &&
     typeof s.options === "object" &&

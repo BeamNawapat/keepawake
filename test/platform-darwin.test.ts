@@ -114,26 +114,26 @@ describe("darwin power", () => {
       "ps -p 500 -o args=": "/usr/bin/caffeinate -i -m -s -w 42\n",
       "kill 500": "",
     });
-    expect(await createDarwinPower(exec).release({ pid: 500, ownerPid: 42 })).toBe(true);
+    expect(await createDarwinPower(exec).release({ pid: 500, ownerPid: 42 })).toBe("released");
     expect(exec.calls).toEqual(["ps -p 500 -o args=", "kill 500"]);
   });
 
   test("release skips a reused pid, a foreign caffeinate and a vanished pid", async () => {
     const reused = fakeExec({ "ps -p 500 -o args=": "/usr/bin/vim notes.txt\n" });
-    expect(await createDarwinPower(reused).release({ pid: 500, ownerPid: 42 })).toBe(false);
+    expect(await createDarwinPower(reused).release({ pid: 500, ownerPid: 42 })).toBe("skipped");
     expect(reused.calls).toEqual(["ps -p 500 -o args="]);
 
     const other = fakeExec({ "ps -p 500 -o args=": "caffeinate -i -t 300\n" });
-    expect(await createDarwinPower(other).release({ pid: 500, ownerPid: 42 })).toBe(false);
+    expect(await createDarwinPower(other).release({ pid: 500, ownerPid: 42 })).toBe("skipped");
     expect(other.calls).toEqual(["ps -p 500 -o args="]);
 
     // A fresh stop process has no in-memory owner map, so the owner must come from the caller.
     const foreign = fakeExec({ "ps -p 500 -o args=": "/usr/bin/caffeinate -i -m -s -w 99\n" });
-    expect(await createDarwinPower(foreign).release({ pid: 500, ownerPid: 42 })).toBe(false);
+    expect(await createDarwinPower(foreign).release({ pid: 500, ownerPid: 42 })).toBe("skipped");
     expect(foreign.calls).not.toContain("kill 500");
 
     const gone = fakeExec({ "ps -p 500 -o args=": { code: 1 } });
-    expect(await createDarwinPower(gone).release({ pid: 500, ownerPid: 42 })).toBe(false);
+    expect(await createDarwinPower(gone).release({ pid: 500, ownerPid: 42 })).toBe("gone");
     expect(gone.calls).toEqual(["ps -p 500 -o args="]);
   });
 });

@@ -45,8 +45,8 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
   const abort = new AbortController();
 
   async function releaseOurs(h: Holder): Promise<void> {
-    const killed = await platform.power.release({ pid: h.pid, ownerPid: process.pid });
-    if (!killed) logger.log(`holder ${h.pid} did not match the expected command line, left alone`);
+    const result = await platform.power.release({ pid: h.pid, ownerPid: process.pid });
+    if (result === "skipped") logger.log(`holder ${h.pid} did not match the expected command line, left alone`);
   }
 
   let cleaning: Promise<void> | null = null;

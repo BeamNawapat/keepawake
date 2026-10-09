@@ -51,6 +51,17 @@ describe("state", () => {
     expect(readState(join(root, "nope.json"))).toBeNull();
   });
 
+  test("state without cli (older version) or with a bad holderPid is null", () => {
+    const file = join(root, "old.json");
+    const { cli: _cli, ...noCli } = sample();
+    for (const s of [noCli, { ...sample(), holderPid: 0 }, { ...sample(), holderPid: "7" }, { ...sample(), holderPid: -3 }]) {
+      writeFileSync(file, JSON.stringify(s));
+      expect(readState(file)).toBeNull();
+    }
+    writeFileSync(file, JSON.stringify({ ...sample(), holderPid: null }));
+    expect(readState(file)).not.toBeNull();
+  });
+
   test("corrupt, truncated or wrong-version files are null", () => {
     const file = join(root, "bad.json");
     for (const content of ["", "{", "[]", "null", '{"version":2,"pid":1}', '{"version":1,"pid":"x"}']) {

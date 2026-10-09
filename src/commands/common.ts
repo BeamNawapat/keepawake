@@ -115,8 +115,8 @@ export function lidChanged(lid: LidSnapshot | null): lid is LidSnapshot {
 export async function releaseHolder(ctx: Ctx, platform: Platform, state: State): Promise<void> {
   if (state.holderPid === null) return;
   try {
-    const killed = await platform.power.release({ pid: state.holderPid, ownerPid: state.pid });
-    if (!killed) ctx.ui.warn(`holder ${state.holderPid} does not look like ours (pid reused?), left alone`);
+    const result = await platform.power.release({ pid: state.holderPid, ownerPid: state.pid });
+    if (result === "skipped") ctx.ui.warn(`holder ${state.holderPid} does not look like ours (pid reused?), left alone`);
   } catch (e) {
     ctx.ui.warn(`could not release holder ${state.holderPid}: ${(e as Error).message}`);
   }

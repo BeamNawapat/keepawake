@@ -1,4 +1,5 @@
 import { readState } from "../core/state.js";
+import { startInProgress } from "./start.js";
 import { clearFiles, lidChanged, releaseHolder, type Ctx } from "./common.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -12,6 +13,13 @@ export async function stop(ctx: Ctx, opts: { quiet?: boolean } = {}): Promise<nu
   const { ui, paths } = ctx;
   const say = opts.quiet ? () => {} : (m: string) => ui.info(m);
   const platform = ctx.makePlatform(false);
+
+  // Until the daemon rewrites state.json, it names the start process, which looks stale.
+  const starting = startInProgress(paths);
+  if (starting !== null) {
+    ui.err(`a start is in progress (pid ${starting}), try again in a moment`);
+    return 1;
+  }
 
   const state = readState(paths.state);
   if (!state) {

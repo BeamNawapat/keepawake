@@ -1,7 +1,7 @@
 import type { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import type { Exec } from "../../ports/exec.js";
-import type { Holder, HolderOptions, PowerPort } from "../../ports/power.js";
+import type { Holder, HolderOptions, PowerPort, ReleaseResult } from "../../ports/power.js";
 import { queryWin32Process } from "./alive.js";
 import { encodedCommandArgs } from "./powershell.js";
 
@@ -57,17 +57,18 @@ export function createWin32Power(exec: Exec, spawnHolder: SpawnHolder = realSpaw
       children.set(child.pid, child);
       return { pid: child.pid };
     },
-    async release(holder: { pid: number; ownerPid: number }): Promise<boolean> {
+    async release(holder: { pid: number; ownerPid: number }): Promise<ReleaseResult> {
       const child = children.get(holder.pid);
       children.delete(holder.pid);
       // Closing stdin lets the script reset ES_CONTINUOUS itself; taskkill covers a wedged one.
       child?.stdin?.end();
       // state.json can outlive a reboot; never taskkill a pid we cannot prove is our holder.
       const row = await queryWin32Process(exec, holder.pid);
-      if (!row || row.name.toLowerCase() !== "powershell.exe") return false;
-      if (!row.commandLine.includes("-EncodedCommand") || !row.commandLine.includes(HOLDER_B64_PREFIX)) return false;
+      if (!row) return "gone";
+      if (row.name.toLowerCase() !== "powershell.exe") return "skipped";
+      if (!row.commandLine.includes("-EncodedCommand") || !row.commandLine.includes(HOLDER_B64_PREFIX)) return "skipped";
       await exec.run("taskkill", ["/PID", String(holder.pid), "/T", "/F"], { timeoutMs: 5000 });
-      return true;
+      return "released";
     },
   };
 }

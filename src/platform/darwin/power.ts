@@ -1,6 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import type { Exec } from "../../ports/exec.js";
-import type { HolderOptions, PowerPort } from "../../ports/power.js";
+import type { HolderOptions, PowerPort, ReleaseResult } from "../../ports/power.js";
 
 export type SpawnFn = (cmd: string, args: string[]) => ChildProcess;
 
@@ -22,16 +22,16 @@ export function createDarwinPower(exec: Exec, spawnFn: SpawnFn = defaultSpawn): 
       child.unref();
       return { pid };
     },
-    async release(holder: { pid: number; ownerPid: number }) {
+    async release(holder: { pid: number; ownerPid: number }): Promise<ReleaseResult> {
       // Pids get reused, and state.json survives reboots. Kill only a caffeinate that waits on our daemon.
       const r = await exec.run("ps", ["-p", String(holder.pid), "-o", "args="], { timeoutMs: 5000 });
-      if (r.code !== 0) return false;
+      if (r.code !== 0) return "gone";
       const argv = r.stdout.trim().split(/\s+/);
-      if (!argv[0]?.endsWith("caffeinate")) return false;
+      if (!argv[0]?.endsWith("caffeinate")) return "skipped";
       const w = argv.indexOf("-w");
-      if (w === -1 || argv[w + 1] !== String(holder.ownerPid)) return false;
+      if (w === -1 || argv[w + 1] !== String(holder.ownerPid)) return "skipped";
       await exec.run("kill", [String(holder.pid)], { timeoutMs: 5000 });
-      return true;
+      return "released";
     },
   };
 }
