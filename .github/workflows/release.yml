@@ -20,7 +20,7 @@ jobs:
       - run: bun run build
       - run: bun test
       # Node 24 ships npm >= 11.5, which trusted publishing (OIDC) requires.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org

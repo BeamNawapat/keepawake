@@ -51,7 +51,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       # Node comes after the build so the bundle is exercised on the minimum supported runtime.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '18.17'
       - run: node dist/cli.js --version
