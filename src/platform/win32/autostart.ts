@@ -36,7 +36,8 @@ export function createWin32Autostart(
       const folder = dir();
       const path = join(folder, "start.vbs");
       await mkdir(folder, { recursive: true });
-      await writeFile(path, script, "utf8");
+      // WSH reads .vbs in the ANSI code page unless there is a UTF-16 BOM, which mangles non-ASCII paths.
+      await writeFile(path, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(script, "utf16le")]));
       const r = await exec.run(
         "reg",
         ["add", RUN_KEY, "/v", VALUE, "/t", "REG_SZ", "/d", `wscript.exe "${path}"`, "/f"],

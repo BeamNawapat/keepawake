@@ -8,6 +8,8 @@ export interface State {
   pid: number;
   startedAt: string;
   mode: "foreground" | "daemon";
+  /** realpath of the cli entry that wrote this state; isAlive matches it against the process argv. */
+  cli: string;
   options: Options;
   holderPid: number | null;
   lid: LidSnapshot | null;

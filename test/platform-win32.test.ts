@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { AGENTS } from "../src/core/agents.js";
 import { detectAgents } from "../src/core/detector.js";
 import { createWin32Autostart, buildStartVbs } from "../src/platform/win32/autostart.js";
-import { isAliveWin32 } from "../src/platform/win32/alive.js";
+import { isAliveWin32, queryWin32Process } from "../src/platform/win32/alive.js";
 import { createWin32Lid, parseActiveScheme, parseLidIndexes } from "../src/platform/win32/lid.js";
 import { createWin32Network, parseCurrentSsid } from "../src/platform/win32/network.js";
 import { createWin32Power, holderScript, type HolderChild } from "../src/platform/win32/power.js";
@@ -17,6 +17,18 @@ import { fakeExec } from "./fake-exec.js";
 
 const fx = (name: string) => readFileSync(join(import.meta.dir, "fixtures", name), "utf8");
 const decode = (b64: string) => Buffer.from(b64, "base64").toString("utf16le");
+/** Answers the CIM lookup (the only powershell.exe call these code paths make) with one row, or nothing. */
+function withCim(exec: ReturnType<typeof fakeExec>, row: { Name: string; CommandLine: string } | null) {
+  const inner = exec.run.bind(exec);
+  exec.run = async (cmd, args, o) => {
+    if (cmd !== "powershell.exe") return inner(cmd, args, o);
+    exec.calls.push("powershell.exe <cim>");
+    return { code: 0, stdout: row ? JSON.stringify(row) : "", stderr: "" };
+  };
+  return exec;
+}
+const holderCmd = (display = false) =>
+  `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodedCommandArgs(holderScript(display)).at(-1)}`;
 const GUID = "381b4222-f694-41f0-9685-ff5bb260df2e";
 
 describe("powershell helpers", () => {
@@ -46,8 +58,8 @@ describe("power holder", () => {
     return child;
   }
 
-  test("acquire spawns hidden powershell; release closes stdin then taskkill", async () => {
-    const exec = fakeExec({ "taskkill /PID 777 /T /F": "ok" });
+  test("acquire spawns hidden powershell; release closes stdin, verifies, then taskkill", async () => {
+    const exec = withCim(fakeExec({ "taskkill /PID 777 /T /F": "ok" }), { Name: "powershell.exe", CommandLine: holderCmd(true) });
     let spawned: { cmd: string; args: string[] } | undefined;
     const child = fakeChild(777);
     const power = createWin32Power(exec, (cmd, args) => ((spawned = { cmd, args }), child));
@@ -55,9 +67,19 @@ describe("power holder", () => {
     expect(holder).toEqual({ pid: 777 });
     expect(spawned!.cmd).toBe("powershell.exe");
     expect(decode(spawned!.args.at(-1)!)).toContain("2147483651");
-    await power.release(holder);
+    expect(await power.release({ pid: 777, ownerPid: 1 })).toBe(true);
     expect(child.ended).toBe(true);
-    expect(exec.calls).toEqual(["taskkill /PID 777 /T /F"]);
+    expect(exec.calls).toEqual(["powershell.exe <cim>", "taskkill /PID 777 /T /F"]);
+  });
+
+  test("release skips taskkill for a reused pid, a foreign powershell and a vanished pid", async () => {
+    const reused = withCim(fakeExec(), { Name: "chrome.exe", CommandLine: "chrome.exe --type=gpu" });
+    expect(await createWin32Power(reused).release({ pid: 777, ownerPid: 1 })).toBe(false);
+    const foreign = withCim(fakeExec(), { Name: "powershell.exe", CommandLine: "powershell.exe -EncodedCommand AAAA" });
+    expect(await createWin32Power(foreign).release({ pid: 777, ownerPid: 1 })).toBe(false);
+    const gone = withCim(fakeExec(), null);
+    expect(await createWin32Power(gone).release({ pid: 777, ownerPid: 1 })).toBe(false);
+    for (const e of [reused, foreign, gone]) expect(e.calls.some((c) => c.startsWith("taskkill"))).toBe(false);
   });
 
   test("acquire rejects when spawn errors", async () => {
@@ -91,18 +113,21 @@ describe("lid", () => {
     `powercfg /setactive ${GUID}`,
   ];
 
-  test("apply unelevated: snapshot then three powercfg writes, no UAC", async () => {
+  test("snapshot reads without writing; set then makes three powercfg writes, no UAC", async () => {
     const exec = fakeExec({
       "powercfg /getactivescheme": fx("powercfg-lid-th.txt"),
       [query]: fx("powercfg-lid-en.txt"),
       ...Object.fromEntries(sets.map((s) => [s, "ok"])),
     });
-    const snap = await createWin32Lid(exec).apply();
+    const lid = createWin32Lid(exec);
+    const snap = await lid.snapshot();
     expect(snap).toEqual({ kind: "win32", scheme: GUID, ac: "0x00000001", dc: "0x00000002" });
+    expect(exec.calls).toEqual(["powercfg /getactivescheme", query]);
+    await lid.set(snap);
     expect(exec.calls).toEqual(["powercfg /getactivescheme", query, ...sets]);
   });
 
-  test("apply falls back to ONE RunAs call when powercfg is denied", async () => {
+  test("set falls back to ONE RunAs call when powercfg is denied", async () => {
     let elevated: string[] | undefined;
     const exec = fakeExec({
       "powercfg /getactivescheme": fx("powercfg-lid-en.txt"),
@@ -118,11 +143,15 @@ describe("lid", () => {
       }
       return inner(cmd, args, o);
     };
-    await createWin32Lid(exec).apply();
+    await createWin32Lid(exec).set({ kind: "win32", scheme: GUID, ac: "0x00000001", dc: "0x00000002" });
     expect(exec.calls.filter((c) => c.startsWith("powershell.exe"))).toHaveLength(1);
     const outer = decode(elevated!.at(-1)!);
     expect(outer).toContain("Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden");
+    expect(outer).toContain("$ErrorActionPreference = 'Stop'");
+    expect(outer).toContain("try {");
+    expect(outer).toContain("if ($null -eq $p) { exit 1 }");
     expect(outer).toContain("exit $p.ExitCode");
+    expect(outer).toContain("} catch { exit 1223 }");
     // The batch is itself an EncodedCommand carrying all three writes.
     const innerB64 = /'([A-Za-z0-9+/=]{20,})'/.exec(outer)![1]!;
     const innerScript = decode(innerB64);
@@ -130,7 +159,7 @@ describe("lid", () => {
     expect(innerScript).toContain(`powercfg '/setactive' '${GUID}'`);
   });
 
-  test("apply throws when elevation also fails", async () => {
+  test("set throws when elevation also fails", async () => {
     const exec = fakeExec({
       "powercfg /getactivescheme": fx("powercfg-lid-en.txt"),
       [query]: fx("powercfg-lid-en.txt"),
@@ -139,7 +168,9 @@ describe("lid", () => {
     const inner = exec.run.bind(exec);
     exec.run = async (cmd, args, o) =>
       cmd === "powershell.exe" ? { code: 1223, stdout: "", stderr: "" } : inner(cmd, args, o);
-    await expect(createWin32Lid(exec).apply()).rejects.toThrow("UAC");
+    await expect(
+      createWin32Lid(exec).set({ kind: "win32", scheme: GUID, ac: "0x00000001", dc: "0x00000002" }),
+    ).rejects.toThrow("UAC");
   });
 
   test("restore writes decimal of the snapshot hex", async () => {
@@ -264,6 +295,10 @@ describe("autostart", () => {
     const auto = createWin32Autostart(exec, { appData });
     expect(await auto.install(["node.exe", "cli.js", "start"])).toEqual({ path });
     expect(existsSync(path)).toBe(true);
+    // WSH needs the UTF-16LE BOM to read non-ASCII paths.
+    const raw = readFileSync(path);
+    expect([raw[0], raw[1]]).toEqual([0xff, 0xfe]);
+    expect(raw.subarray(2).toString("utf16le")).toContain("sh.Run");
     expect(await auto.isInstalled()).toBe(true);
     expect(await auto.remove()).toBe(true);
     expect(existsSync(path)).toBe(false);
@@ -277,16 +312,41 @@ describe("autostart", () => {
 
 describe("isAliveWin32", () => {
   const key = (pid: number) => `tasklist /FI PID eq ${pid} /FO CSV /NH`;
-  test("running node.exe", async () => {
-    const exec = fakeExec({ [key(42)]: '"node.exe","42","Console","1","40,000 K"\r\n' });
-    expect(await isAliveWin32(exec, 42, "node.exe")).toBe(true);
+  const CLI = "C:\\x\\keepawake\\dist\\cli.js";
+  const daemon = { mode: "daemon" as const, cli: CLI };
+  const fg = { mode: "foreground" as const, cli: CLI };
+  const node42 = { [key(42)]: '"node.exe","42","Console","1","40,000 K"\r\n' };
+
+  test("daemon: node.exe with __daemon and our cli", async () => {
+    const exec = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} __daemon` });
+    expect(await isAliveWin32(exec, 42, daemon, "node.exe")).toBe(true);
   });
-  test("pid reused by another image", async () => {
-    const exec = fakeExec({ [key(42)]: '"chrome.exe","42","Console","1","40,000 K"' });
-    expect(await isAliveWin32(exec, 42, "node.exe")).toBe(false);
+  test("daemon: unrelated node.exe that reused the pid", async () => {
+    const exec = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: "node C:\\other\\server.js" });
+    expect(await isAliveWin32(exec, 42, daemon, "node.exe")).toBe(false);
+  });
+  test("daemon: our cli without __daemon is not a daemon", async () => {
+    const exec = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} start` });
+    expect(await isAliveWin32(exec, 42, daemon, "node.exe")).toBe(false);
+  });
+  test("foreground: cli path plus ' start'", async () => {
+    const ok = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} start --always` });
+    expect(await isAliveWin32(ok, 42, fg, "node.exe")).toBe(true);
+    const no = withCim(fakeExec(node42), { Name: "node.exe", CommandLine: `node ${CLI} status` });
+    expect(await isAliveWin32(no, 42, fg, "node.exe")).toBe(false);
+  });
+  test("unknown argv is not alive", async () => {
+    const exec = withCim(fakeExec(node42), null);
+    expect(await isAliveWin32(exec, 42, daemon, "node.exe")).toBe(false);
+    expect(await queryWin32Process(exec, 42)).toBeNull();
+  });
+  test("pid reused by another image never reaches the CIM lookup", async () => {
+    const exec = withCim(fakeExec({ [key(42)]: '"chrome.exe","42","Console","1","40,000 K"' }), null);
+    expect(await isAliveWin32(exec, 42, daemon, "node.exe")).toBe(false);
+    expect(exec.calls).toEqual([key(42)]);
   });
   test("no match", async () => {
     const exec = fakeExec({ [key(42)]: "INFO: No tasks are running which match the specified criteria." });
-    expect(await isAliveWin32(exec, 42)).toBe(false);
+    expect(await isAliveWin32(exec, 42, daemon)).toBe(false);
   });
 });

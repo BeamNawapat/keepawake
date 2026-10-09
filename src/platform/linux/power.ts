@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { basename } from "node:path";
 import type { Exec } from "../../ports/exec.js";
 import type { Holder, HolderOptions, PowerPort } from "../../ports/power.js";
 import { UnsupportedError } from "./errors.js";
@@ -13,16 +14,32 @@ export interface LinuxPowerOptions {
   kill?: (pid: number, signal: NodeJS.Signals) => void;
 }
 
+/** How long a fresh holder must stay alive before we trust that logind/polkit accepted it. */
+const SETTLE_MS = 400;
+
 const nodeSpawnHolder: SpawnHolder = (cmd, args) =>
   new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: "ignore" });
+    const child = spawn(cmd, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    let exited = false;
+    child.stderr!.setEncoding("utf8").on("data", (d: string) => (stderr += d));
+    child.once("exit", () => (exited = true));
     child.once("error", reject);
     child.once("spawn", () => {
-      child.unref();
-      child.removeListener("error", reject);
       // Late failures (inhibitor killed) surface as a dead pid, not an unhandled event.
+      child.removeListener("error", reject);
       child.on("error", () => {});
-      resolve({ pid: child.pid! });
+      // systemd-inhibit spawns fine and then exits at once when logind or polkit refuses,
+      // so "spawned" alone does not mean the lock is held.
+      setTimeout(() => {
+        if (exited || child.exitCode !== null || child.signalCode !== null) {
+          reject(new Error(stderr.trim() || `systemd-inhibit exited (code ${child.exitCode ?? child.signalCode})`));
+          return;
+        }
+        child.stderr!.destroy();
+        child.unref();
+        resolve({ pid: child.pid! });
+      }, SETTLE_MS);
     });
   });
 
@@ -57,13 +74,19 @@ export function createLinuxPower(exec: Exec, options: LinuxPowerOptions = {}): P
         throw new UnsupportedError(`could not start systemd-inhibit: ${(e as Error).message}`);
       }
     },
-    async release(holder: Holder) {
+    async release(holder: { pid: number; ownerPid: number }) {
+      // state.json can outlive a reboot, so the pid may belong to something else by now.
+      const r = await exec.run("ps", ["-p", String(holder.pid), "-o", "args="], { timeoutMs: 5000 });
+      if (r.code !== 0) return false;
+      const argv = r.stdout.trim().split(/\s+/);
+      if (basename(argv[0] ?? "") !== "systemd-inhibit" || !argv.includes("--who=keepawake")) return false;
       try {
         kill(holder.pid, "SIGTERM");
       } catch (e) {
         // Already gone is the goal state.
         if ((e as NodeJS.ErrnoException).code !== "ESRCH") throw e;
       }
+      return true;
     },
   };
 }

@@ -2,6 +2,7 @@ import type { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import type { Exec } from "../../ports/exec.js";
 import type { Holder, HolderOptions, PowerPort } from "../../ports/power.js";
+import { queryWin32Process } from "./alive.js";
 import { encodedCommandArgs } from "./powershell.js";
 
 /** The slice of ChildProcess the holder needs, so tests can fake it. */
@@ -35,6 +36,12 @@ export function holderScript(display: boolean): string {
   ].join("\n");
 }
 
+/**
+ * First 32 base64 chars of the holder script. The text before the flags is the same for
+ * every holder, so this identifies our powershell without depending on `display`.
+ */
+const HOLDER_B64_PREFIX = encodedCommandArgs(holderScript(false)).at(-1)!.slice(0, 32);
+
 export function createWin32Power(exec: Exec, spawnHolder: SpawnHolder = realSpawn): PowerPort {
   const children = new Map<number, HolderChild>();
   return {
@@ -50,12 +57,17 @@ export function createWin32Power(exec: Exec, spawnHolder: SpawnHolder = realSpaw
       children.set(child.pid, child);
       return { pid: child.pid };
     },
-    async release(holder: Holder): Promise<void> {
+    async release(holder: { pid: number; ownerPid: number }): Promise<boolean> {
       const child = children.get(holder.pid);
       children.delete(holder.pid);
       // Closing stdin lets the script reset ES_CONTINUOUS itself; taskkill covers a wedged one.
       child?.stdin?.end();
+      // state.json can outlive a reboot; never taskkill a pid we cannot prove is our holder.
+      const row = await queryWin32Process(exec, holder.pid);
+      if (!row || row.name.toLowerCase() !== "powershell.exe") return false;
+      if (!row.commandLine.includes("-EncodedCommand") || !row.commandLine.includes(HOLDER_B64_PREFIX)) return false;
       await exec.run("taskkill", ["/PID", String(holder.pid), "/T", "/F"], { timeoutMs: 5000 });
+      return true;
     },
   };
 }

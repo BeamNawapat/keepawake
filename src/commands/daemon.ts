@@ -10,7 +10,7 @@ import { readState, writeState, type State } from "../core/state.js";
 import { GLYPH } from "../core/ui.js";
 import { VERSION } from "../version.js";
 import type { Holder } from "../ports/power.js";
-import { clearFiles, type Ctx } from "./common.js";
+import { clearFiles, cliPath, type Ctx } from "./common.js";
 
 /**
  * The monitor loop, shared by `start` (foreground) and `__daemon`. Options come
@@ -32,7 +32,7 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
     if (mode === "foreground") ui.line(m);
   };
 
-  let state: State = { ...saved, pid: process.pid, mode };
+  let state: State = { ...saved, pid: process.pid, mode, cli: cliPath() };
   const save = (patch: Partial<State> = {}): void => {
     state = { ...state, ...patch };
     writeState(paths.state, state);
@@ -44,13 +44,18 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
   let fatal: Error | null = null;
   const abort = new AbortController();
 
+  async function releaseOurs(h: Holder): Promise<void> {
+    const killed = await platform.power.release({ pid: h.pid, ownerPid: process.pid });
+    if (!killed) logger.log(`holder ${h.pid} did not match the expected command line, left alone`);
+  }
+
   let cleaning: Promise<void> | null = null;
   const cleanup = (): Promise<void> => (cleaning ??= doCleanup());
   async function doCleanup(): Promise<void> {
     abort.abort();
     if (holder) {
       try {
-        await platform.power.release(holder);
+        await releaseOurs(holder);
       } catch (e) {
         logger.log(`release failed: ${(e as Error).message}`);
       }
@@ -128,7 +133,7 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
       }
       case "release": {
         if (holder) {
-          await platform.power.release(holder);
+          await releaseOurs(holder);
           holder = null;
           save({ holderPid: null });
         }

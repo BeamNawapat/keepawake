@@ -1,5 +1,5 @@
 import { readState } from "../core/state.js";
-import { clearFiles, type Ctx } from "./common.js";
+import { clearFiles, lidChanged, releaseHolder, type Ctx } from "./common.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -20,7 +20,8 @@ export async function stop(ctx: Ctx, opts: { quiet?: boolean } = {}): Promise<nu
     return 0;
   }
 
-  if (await platform.isAlive(state.pid)) {
+  const alive = { mode: state.mode, cli: state.cli };
+  if (await platform.isAlive(state.pid, alive)) {
     say(`Stopping daemon (PID ${state.pid})...`);
     if (process.platform === "win32") {
       // /F skips signal handlers, which is why the cleanup below is not optional.
@@ -31,8 +32,8 @@ export async function stop(ctx: Ctx, opts: { quiet?: boolean } = {}): Promise<nu
       } catch {
         // exited between the check and the kill
       }
-      for (let i = 0; i < 50 && (await platform.isAlive(state.pid)); i++) await sleep(100);
-      if (await platform.isAlive(state.pid)) {
+      for (let i = 0; i < 50 && (await platform.isAlive(state.pid, alive)); i++) await sleep(100);
+      if (await platform.isAlive(state.pid, alive)) {
         try {
           process.kill(state.pid, "SIGKILL");
         } catch {
@@ -47,14 +48,8 @@ export async function stop(ctx: Ctx, opts: { quiet?: boolean } = {}): Promise<nu
 
   // The daemon may have updated state.json while shutting down.
   const latest = readState(paths.state) ?? state;
-  if (latest.holderPid !== null) {
-    try {
-      await platform.power.release({ pid: latest.holderPid });
-    } catch (e) {
-      ui.warn(`could not release holder ${latest.holderPid}: ${(e as Error).message}`);
-    }
-  }
-  if (latest.lid) {
+  await releaseHolder(ctx, platform, latest);
+  if (lidChanged(latest.lid)) {
     try {
       await platform.lid.restore(latest.lid);
     } catch (e) {

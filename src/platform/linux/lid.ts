@@ -6,9 +6,10 @@ import type { LidPort, LidSnapshot } from "../../ports/lid.js";
  */
 export function createLinuxLid(): LidPort {
   return {
-    async apply(): Promise<LidSnapshot> {
+    async snapshot(): Promise<LidSnapshot> {
       return { kind: "linux" };
     },
+    async set() {},
     async restore() {},
   };
 }

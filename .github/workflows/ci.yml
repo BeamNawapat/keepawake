@@ -36,6 +36,20 @@ jobs:
           node dist/cli.js check || true
           node dist/cli.js start --always -d
           node dist/cli.js status --json
+      # Windows has no pmset/caffeinate to inspect, so ask the OS which processes hold a
+      # SYSTEM power request. Without this a holder that silently failed to start would pass.
+      - name: Verify power request (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if node dist/cli.js status --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.exit(typeof JSON.parse(d).holderPid==='number'?0:1))"; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != 1 ]; then echo "holderPid never became a number"; exit 1; fi
+          powercfg /requests | tee powercfg.txt
+          grep -A3 'SYSTEM:' powercfg.txt | grep -qi powershell
       - name: Stop daemon
         if: always()
         shell: bash
@@ -57,3 +71,14 @@ jobs:
           node-version: '18.17'
       - run: node dist/cli.js --version
       - run: node dist/cli.js check || true
+      - name: Daemon smoke
+        env:
+          KEEPAWAKE_HOME: ${{ github.workspace }}/.ci-keepawake-home
+        run: |
+          node dist/cli.js start --always -d
+          node dist/cli.js status --json
+      - name: Stop daemon
+        if: always()
+        env:
+          KEEPAWAKE_HOME: ${{ github.workspace }}/.ci-keepawake-home
+        run: node dist/cli.js stop

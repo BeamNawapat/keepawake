@@ -24,12 +24,16 @@ export function createDarwinLid(exec: Exec, privilege: PrivilegePort): LidPort {
   }
 
   return {
-    async apply() {
-      // Snapshot first: if the user already had it on, restore must not turn it off.
+    async snapshot() {
+      // Read separately from set() so the caller can persist it before anything changes.
+      // If the user already had it on, restore must not turn it off.
       const r = await exec.run("pmset", ["-g"], { timeoutMs: 5000 });
       const snapshot: LidSnapshot = { kind: "darwin", sleepDisabled: parseSleepDisabled(r.stdout) };
-      await setDisableSleep("1");
       return snapshot;
+    },
+    async set(snapshot) {
+      if (snapshot.kind !== "darwin") return;
+      await setDisableSleep("1");
     },
     async restore(snapshot) {
       if (snapshot.kind !== "darwin") return;

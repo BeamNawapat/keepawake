@@ -46,19 +46,34 @@ describe("linux power", () => {
     await expect(power.acquire({ display: false, ownerPid: 1 })).rejects.toBeInstanceOf(UnsupportedError);
   });
 
-  test("release sends SIGTERM and tolerates ESRCH", async () => {
+  const PS = "ps -p 7 -o args=";
+  const OURS = "systemd-inhibit --what=idle:sleep --who=keepawake --why=agent running sleep infinity\n";
+
+  test("release verifies argv, sends SIGTERM and tolerates ESRCH", async () => {
     const sent: Array<[number, string]> = [];
-    const ok = createLinuxPower(fakeExec(), { kill: (p, s) => void sent.push([p, s]) });
-    await ok.release({ pid: 7 });
+    const ok = createLinuxPower(fakeExec({ [PS]: OURS }), { kill: (p, s) => void sent.push([p, s]) });
+    expect(await ok.release({ pid: 7, ownerPid: 1 })).toBe(true);
     expect(sent).toEqual([[7, "SIGTERM"]]);
-    const gone = createLinuxPower(fakeExec(), {
+    const gone = createLinuxPower(fakeExec({ [PS]: OURS }), {
       kill: () => { throw Object.assign(new Error("x"), { code: "ESRCH" }); },
     });
-    await gone.release({ pid: 7 });
-    const denied = createLinuxPower(fakeExec(), {
+    expect(await gone.release({ pid: 7, ownerPid: 1 })).toBe(true);
+    const denied = createLinuxPower(fakeExec({ [PS]: OURS }), {
       kill: () => { throw Object.assign(new Error("x"), { code: "EPERM" }); },
     });
-    await expect(denied.release({ pid: 7 })).rejects.toThrow();
+    await expect(denied.release({ pid: 7, ownerPid: 1 })).rejects.toThrow();
+  });
+
+  test("release does not kill a reused pid or a vanished one", async () => {
+    const sent: number[] = [];
+    const kill = (p: number) => void sent.push(p);
+    const reused = createLinuxPower(fakeExec({ [PS]: "/usr/bin/vim notes.txt\n" }), { kill });
+    expect(await reused.release({ pid: 7, ownerPid: 1 })).toBe(false);
+    const foreignInhibit = createLinuxPower(fakeExec({ [PS]: "systemd-inhibit --who=other sleep 5\n" }), { kill });
+    expect(await foreignInhibit.release({ pid: 7, ownerPid: 1 })).toBe(false);
+    const gone = createLinuxPower(fakeExec({ [PS]: { code: 1 } }), { kill });
+    expect(await gone.release({ pid: 7, ownerPid: 1 })).toBe(false);
+    expect(sent).toEqual([]);
   });
 });
 
@@ -139,8 +154,10 @@ describe("linux misc", () => {
 
   test("lid and privilege are no-ops", async () => {
     const lid = createLinuxLid();
-    expect(await lid.apply()).toEqual({ kind: "linux" });
-    await lid.restore({ kind: "linux" });
+    const snap = await lid.snapshot();
+    expect(snap).toEqual({ kind: "linux" });
+    await lid.set(snap);
+    await lid.restore(snap);
     const p = createLinuxPrivilege();
     expect(await p.isElevated()).toBe(true);
     expect(await p.prepare()).toBe(true);

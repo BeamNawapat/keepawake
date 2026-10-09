@@ -50,11 +50,17 @@ export function createWin32Lid(exec: Exec): LidPort {
       "exit 0",
     ].join("\n");
     const innerArgs = encodedCommandArgs(inner);
+    // A refused UAC prompt makes Start-Process throw; without Stop + catch the script would
+    // fall through to `exit $p.ExitCode` with $p null, which exits 0 and looks like success.
     const outer = [
-      `$p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList ${innerArgs
+      "$ErrorActionPreference = 'Stop'",
+      "try {",
+      `  $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList ${innerArgs
         .map(psQuote)
         .join(",")}`,
-      "exit $p.ExitCode",
+      "  if ($null -eq $p) { exit 1 }",
+      "  exit $p.ExitCode",
+      "} catch { exit 1223 }",
     ].join("\n");
     const r = await exec.run("powershell.exe", encodedCommandArgs(outer), { timeoutMs: 120000 });
     return r.code === 0;
@@ -66,15 +72,19 @@ export function createWin32Lid(exec: Exec): LidPort {
   }
 
   return {
-    async apply(): Promise<WinLid> {
+    async snapshot(): Promise<WinLid> {
       const active = await exec.run("powercfg", ["/getactivescheme"], { timeoutMs: 10000 });
       const scheme = parseActiveScheme(active.stdout);
       if (active.code !== 0 || !scheme) throw new Error("could not read the active power scheme");
       const q = await exec.run("powercfg", ["/query", scheme, "SUB_BUTTONS", "LIDACTION"], { timeoutMs: 10000 });
       const idx = parseLidIndexes(q.stdout);
       if (q.code !== 0 || !idx) throw new Error("could not read the lid close action");
-      await change(setCommands(scheme, "0x00000000", "0x00000000"));
       return { kind: "win32", scheme, ac: idx.ac, dc: idx.dc };
+    },
+    async set(snapshot: LidSnapshot): Promise<void> {
+      if (snapshot.kind !== "win32") return;
+      if (!GUID.test(snapshot.scheme)) throw new Error("lid snapshot in state file is malformed");
+      await change(setCommands(snapshot.scheme, "0x00000000", "0x00000000"));
     },
     async restore(snapshot: LidSnapshot): Promise<void> {
       if (snapshot.kind !== "win32") return;

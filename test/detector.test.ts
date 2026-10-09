@@ -119,6 +119,15 @@ describe("win32 naming", () => {
     expect(ids(d)).toContain("cursor");
   });
 
+  test("MSIX/Store Claude Desktop is not counted as Claude Code", () => {
+    const store: ProcessInfo[] = [
+      { pid: 9, ppid: 0, comm: "Claude.exe", exePath: "C:\\Program Files\\WindowsApps\\Claude_1.2.3.0_x64__abc123\\app\\Claude.exe" },
+    ];
+    const r = detectAgents(store, AGENTS, { platform: "win32", includeApps: true });
+    expect(r.find((x) => x.id === "claude-desktop")?.pids).toEqual([9]);
+    expect(r.find((x) => x.id === "claude-code")).toBeUndefined();
+  });
+
   test("exePath separates desktop from CLI", () => {
     expect(d.find((x) => x.id === "claude-code")?.pids).toEqual([1]);
     expect(d.find((x) => x.id === "claude-desktop")?.pids).toEqual([2]);

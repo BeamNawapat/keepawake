@@ -1,8 +1,9 @@
-import { unlinkSync } from "node:fs";
+import { realpathSync, unlinkSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { defaultOptions, parseDuration, resolveInterval, type Options } from "../core/config.js";
 import { resolvePaths, type Paths } from "../core/paths.js";
 import { clearState, readState, type State } from "../core/state.js";
+import type { LidSnapshot } from "../ports/lid.js";
 import { createUi, type Ui } from "../core/ui.js";
 import { nodeExec, type Exec } from "../ports/exec.js";
 import { createPlatform, type Platform } from "../platform/index.js";
@@ -95,6 +96,32 @@ export function optionsToFlags(o: Options): string[] {
   return f;
 }
 
+/** realpath of the running cli entry, recorded in state.json so isAlive can match it against argv. */
+export function cliPath(): string {
+  const arg = process.argv[1] ?? "";
+  try {
+    return realpathSync(arg);
+  } catch {
+    return arg;
+  }
+}
+
+/** A Linux snapshot is a placeholder: the inhibitor dies with the holder, so there is nothing to restore. */
+export function lidChanged(lid: LidSnapshot | null): lid is LidSnapshot {
+  return lid !== null && lid.kind !== "linux";
+}
+
+/** Releases a recorded holder; says so when the argv check refused to kill it. */
+export async function releaseHolder(ctx: Ctx, platform: Platform, state: State): Promise<void> {
+  if (state.holderPid === null) return;
+  try {
+    const killed = await platform.power.release({ pid: state.holderPid, ownerPid: state.pid });
+    if (!killed) ctx.ui.warn(`holder ${state.holderPid} does not look like ours (pid reused?), left alone`);
+  } catch (e) {
+    ctx.ui.warn(`could not release holder ${state.holderPid}: ${(e as Error).message}`);
+  }
+}
+
 export function clearFiles(paths: Paths): void {
   clearState(paths.state);
   try {
@@ -122,18 +149,12 @@ export async function reconcile(ctx: Ctx, platform: Platform, opts: { restoreLid
     // A corrupt state.json reads as null; a leftover pid file alone carries nothing worth keeping.
     return { kind: "none" };
   }
-  if (await platform.isAlive(state.pid)) return { kind: "alive", state };
+  if (await platform.isAlive(state.pid, { mode: state.mode, cli: state.cli })) return { kind: "alive", state };
 
-  if (state.lid && !opts.restoreLid) return { kind: "blocked", state };
+  if (lidChanged(state.lid) && !opts.restoreLid) return { kind: "blocked", state };
 
-  if (state.holderPid !== null) {
-    try {
-      await platform.power.release({ pid: state.holderPid });
-    } catch (e) {
-      ctx.ui.warn(`could not release holder ${state.holderPid}: ${(e as Error).message}`);
-    }
-  }
-  if (state.lid) {
+  await releaseHolder(ctx, platform, state);
+  if (lidChanged(state.lid)) {
     try {
       await platform.lid.restore(state.lid);
     } catch (e) {

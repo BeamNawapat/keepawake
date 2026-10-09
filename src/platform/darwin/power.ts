@@ -1,6 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import type { Exec } from "../../ports/exec.js";
-import type { Holder, HolderOptions, PowerPort } from "../../ports/power.js";
+import type { HolderOptions, PowerPort } from "../../ports/power.js";
 
 export type SpawnFn = (cmd: string, args: string[]) => ChildProcess;
 
@@ -12,7 +12,6 @@ export function caffeinateArgs(opts: HolderOptions): string[] {
 }
 
 export function createDarwinPower(exec: Exec, spawnFn: SpawnFn = defaultSpawn): PowerPort {
-  const owners = new Map<number, number>();
   return {
     async acquire(opts) {
       const child = spawnFn("/usr/bin/caffeinate", caffeinateArgs(opts));
@@ -21,21 +20,18 @@ export function createDarwinPower(exec: Exec, spawnFn: SpawnFn = defaultSpawn): 
         child.once("spawn", () => (child.pid ? resolve(child.pid) : reject(new Error("caffeinate has no pid"))));
       });
       child.unref();
-      owners.set(pid, opts.ownerPid);
       return { pid };
     },
-    async release(holder: Holder) {
-      // Pids get reused. Only kill when the live process is still our caffeinate.
+    async release(holder: { pid: number; ownerPid: number }) {
+      // Pids get reused, and state.json survives reboots. Kill only a caffeinate that waits on our daemon.
       const r = await exec.run("ps", ["-p", String(holder.pid), "-o", "args="], { timeoutMs: 5000 });
-      if (r.code !== 0) return;
+      if (r.code !== 0) return false;
       const argv = r.stdout.trim().split(/\s+/);
-      if (!argv[0]?.endsWith("caffeinate")) return;
+      if (!argv[0]?.endsWith("caffeinate")) return false;
       const w = argv.indexOf("-w");
-      if (w === -1) return;
-      const owner = owners.get(holder.pid);
-      if (owner !== undefined && argv[w + 1] !== String(owner)) return;
-      owners.delete(holder.pid);
+      if (w === -1 || argv[w + 1] !== String(holder.ownerPid)) return false;
       await exec.run("kill", [String(holder.pid)], { timeoutMs: 5000 });
+      return true;
     },
   };
 }

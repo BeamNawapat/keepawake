@@ -5,6 +5,8 @@ export interface Paths {
   dir: string;
   pid: string;
   state: string;
+  /** Held by a `start` in progress so two starts cannot both spawn a daemon. */
+  lock: string;
   log: string;
   logOld: string;
 }
@@ -20,6 +22,7 @@ export function resolvePaths(env: NodeJS.ProcessEnv = process.env, home: string 
     dir,
     pid: join(dir, "daemon.pid"),
     state: join(dir, "state.json"),
+    lock: join(dir, "start.lock"),
     log: join(dir, "keepawake.log"),
     logOld: join(dir, "keepawake.log.old"),
   };

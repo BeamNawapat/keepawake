@@ -21,7 +21,9 @@ export function createDarwinPrivilege(exec: Exec, deps: DarwinPrivilegeDeps = {}
       write("  กรุณาใส่รหัสผ่าน Mac: ");
       // sudo -v writes its own prompt to the tty, so it must inherit stdio rather than go through Exec.
       const code = await interactive("sudo", ["-v"]);
-      return code === 0;
+      if (code !== 0) return false;
+      write(`  ${GLYPH.ok} รหัสถูกต้อง — sudo พร้อมใช้\n`);
+      return true;
     },
   };
 }

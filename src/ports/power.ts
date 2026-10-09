@@ -13,5 +13,10 @@ export interface Holder {
 /** Keeps the system from idle-sleeping for as long as the holder lives. */
 export interface PowerPort {
   acquire(opts: HolderOptions): Promise<Holder>;
-  release(holder: Holder): Promise<void>;
+  /**
+   * Kills the holder only after checking its command line looks like ours and
+   * that it is tied to `ownerPid`. Returns false when the check failed and
+   * nothing was killed (the recorded pid was probably reused).
+   */
+  release(holder: { pid: number; ownerPid: number }): Promise<boolean>;
 }

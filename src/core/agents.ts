@@ -15,7 +15,7 @@ export interface AgentDef {
   excludeExePath?: RegExp[];
 }
 
-const CLAUDE_DESKTOP_WIN = /AnthropicClaude|[\\/]Claude[\\/]Claude\.exe$/i;
+const CLAUDE_DESKTOP_WIN = /AnthropicClaude|[\\/]Claude[\\/]Claude\.exe$|WindowsApps[\\/]Claude_/i;
 
 /**
  * THE registry. Adding an agent = one entry here + one line in each fixture

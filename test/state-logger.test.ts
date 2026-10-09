@@ -17,6 +17,7 @@ const sample = (): State => ({
   pid: 123,
   startedAt: "2026-10-09T00:00:00.000Z",
   mode: "daemon",
+  cli: "/opt/keepawake/dist/cli.js",
   options: { ...defaultOptions(), lid: true, hotspot: "Beam" },
   holderPid: 124,
   lid: { kind: "darwin", sleepDisabled: "0" },

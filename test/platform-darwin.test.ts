@@ -23,6 +23,17 @@ Device: en0
 Ethernet Address: bb
 `;
 
+describe("darwin privilege prompt", () => {
+  test("prints the prompt once and a confirmation after sudo -v succeeds", async () => {
+    const out: string[] = [];
+    const priv = createDarwinPrivilege(fakeExec(), { interactive: async () => 0, write: (t) => out.push(t) });
+    expect(await priv.prepare()).toBe(true);
+    const text = out.join("");
+    expect(text.match(/โหมด --lid ต้องใช้สิทธิ์ admin/g)).toHaveLength(1);
+    expect(text).toContain("✔ รหัสถูกต้อง — sudo พร้อมใช้");
+  });
+});
+
 describe("darwin lid", () => {
   test("parses SleepDisabled and the old disablesleep spelling", () => {
     expect(parseSleepDisabled(PMSET_ON)).toBe("1");
@@ -31,7 +42,7 @@ describe("darwin lid", () => {
     expect(parseSleepDisabled("")).toBe("0");
   });
 
-  test("apply snapshots then sets once; restore sets the snapshot value", async () => {
+  test("snapshot then set; restore sets the snapshot value", async () => {
     const exec = fakeExec({
       "pmset -g": PMSET_OFF,
       "sudo -n true": "",
@@ -39,8 +50,10 @@ describe("darwin lid", () => {
       "sudo -n pmset -a disablesleep 0": "",
     });
     const lid = createDarwinLid(exec, createDarwinPrivilege(exec));
-    const snap = await lid.apply();
+    const snap = await lid.snapshot();
     expect(snap).toEqual({ kind: "darwin", sleepDisabled: "0" });
+    expect(exec.calls).toEqual(["pmset -g"]);
+    await lid.set(snap);
     await lid.restore(snap);
     expect(exec.calls).toEqual([
       "pmset -g",
@@ -69,7 +82,9 @@ describe("darwin lid", () => {
       interactive: async (c, a) => (asked.push([c, ...a]), 1),
       write: (t) => out.push(t),
     });
-    await expect(createDarwinLid(exec, priv).apply()).rejects.toThrow("sudo authentication failed");
+    await expect(createDarwinLid(exec, priv).set({ kind: "darwin", sleepDisabled: "0" })).rejects.toThrow(
+      "sudo authentication failed",
+    );
     expect(asked).toEqual([["sudo", "-v"]]);
     expect(out.join("")).toContain("โหมด --lid ต้องใช้สิทธิ์ admin");
     expect(exec.calls).not.toContain("sudo -n pmset -a disablesleep 1");
@@ -99,29 +114,26 @@ describe("darwin power", () => {
       "ps -p 500 -o args=": "/usr/bin/caffeinate -i -m -s -w 42\n",
       "kill 500": "",
     });
-    const power = createDarwinPower(exec, () => fakeChild(500));
-    const h = await power.acquire({ display: false, ownerPid: 42 });
-    await power.release(h);
+    expect(await createDarwinPower(exec).release({ pid: 500, ownerPid: 42 })).toBe(true);
     expect(exec.calls).toEqual(["ps -p 500 -o args=", "kill 500"]);
   });
 
-  test("release skips a reused pid and a caffeinate owned by someone else", async () => {
+  test("release skips a reused pid, a foreign caffeinate and a vanished pid", async () => {
     const reused = fakeExec({ "ps -p 500 -o args=": "/usr/bin/vim notes.txt\n" });
-    await createDarwinPower(reused).release({ pid: 500 });
+    expect(await createDarwinPower(reused).release({ pid: 500, ownerPid: 42 })).toBe(false);
     expect(reused.calls).toEqual(["ps -p 500 -o args="]);
 
     const other = fakeExec({ "ps -p 500 -o args=": "caffeinate -i -t 300\n" });
-    await createDarwinPower(other).release({ pid: 500 });
+    expect(await createDarwinPower(other).release({ pid: 500, ownerPid: 42 })).toBe(false);
     expect(other.calls).toEqual(["ps -p 500 -o args="]);
 
+    // A fresh stop process has no in-memory owner map, so the owner must come from the caller.
     const foreign = fakeExec({ "ps -p 500 -o args=": "/usr/bin/caffeinate -i -m -s -w 99\n" });
-    const p = createDarwinPower(foreign, () => fakeChild(500));
-    const h = await p.acquire({ display: false, ownerPid: 42 });
-    await p.release(h);
+    expect(await createDarwinPower(foreign).release({ pid: 500, ownerPid: 42 })).toBe(false);
     expect(foreign.calls).not.toContain("kill 500");
 
     const gone = fakeExec({ "ps -p 500 -o args=": { code: 1 } });
-    await createDarwinPower(gone).release({ pid: 500 });
+    expect(await createDarwinPower(gone).release({ pid: 500, ownerPid: 42 })).toBe(false);
     expect(gone.calls).toEqual(["ps -p 500 -o args="]);
   });
 });

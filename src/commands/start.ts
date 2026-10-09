@@ -1,16 +1,100 @@
 import { spawn } from "node:child_process";
-import { closeSync, openSync, realpathSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
 import type { Options } from "../core/config.js";
 import { GLYPH } from "../core/ui.js";
 import { readState, writeState, type State } from "../core/state.js";
+import type { LidSnapshot } from "../ports/lid.js";
 import type { Platform } from "../platform/index.js";
-import { clearFiles, reconcile, type Ctx } from "./common.js";
+import type { Paths } from "../core/paths.js";
+import { clearFiles, cliPath, lidChanged, reconcile, type Ctx } from "./common.js";
 import { runMonitor } from "./daemon.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** A lock file with no readable pid is only trusted this long (the writer may be between open and write). */
+const UNREADABLE_LOCK_GRACE_MS = 10_000;
+
+function pidExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM: exists but belongs to someone else.
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function lockHolderAlive(file: string): boolean {
+  let pid = Number.NaN;
+  try {
+    pid = Number(readFileSync(file, "utf8").trim());
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code !== "ENOENT"; // vanished = free
+  }
+  if (Number.isInteger(pid) && pid > 0) return pidExists(pid);
+  try {
+    return Date.now() - statSync(file).mtimeMs < UNREADABLE_LOCK_GRACE_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Exclusive `start.lock` holding our pid. Returns a release function, or null
+ * when another live start owns it. A lock left by a dead process is removed
+ * and taken once more. Exported for tests.
+ */
+export function acquireStartLock(paths: Paths): (() => void) | null {
+  mkdirSync(paths.dir, { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = openSync(paths.lock, "wx");
+      try {
+        writeSync(fd, String(process.pid));
+      } finally {
+        closeSync(fd);
+      }
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        try {
+          unlinkSync(paths.lock);
+        } catch {
+          // already gone
+        }
+      };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      if (lockHolderAlive(paths.lock)) return null;
+      try {
+        unlinkSync(paths.lock);
+      } catch {
+        // someone else removed it first; the retry decides who wins
+      }
+    }
+  }
+  return null;
+}
+
 /** Returns the process exit code. */
 export async function start(ctx: Ctx, options: Options, daemon: boolean): Promise<number> {
+  // Taken before reconcile: a second start must not "clean" the first start's
+  // state.json while that start is still between writing it and spawning.
+  const release = acquireStartLock(ctx.paths);
+  if (!release) {
+    ctx.ui.err("Already running / another start in progress");
+    ctx.ui.dim(`if that is wrong, remove ${ctx.paths.lock}`);
+    return 1;
+  }
+  try {
+    return await startLocked(ctx, options, daemon, release);
+  } finally {
+    release();
+  }
+}
+
+async function startLocked(ctx: Ctx, options: Options, daemon: boolean, releaseLock: () => void): Promise<number> {
   const { ui, paths } = ctx;
   const platform = ctx.makePlatform(options.lid);
 
@@ -27,41 +111,60 @@ export async function start(ctx: Ctx, options: Options, daemon: boolean): Promis
   if (rec.kind === "cleaned") ui.warn("cleaned stale state from a previous run");
 
   let lid: State["lid"] = null;
+  let snapshot: LidSnapshot | null = null;
   if (options.lid) {
     // Prompt now, while a terminal is attached. A detached daemon cannot ask.
-    ui.line(`\n  ${GLYPH.key} โหมด --lid ต้องใช้สิทธิ์ admin`);
     if (!(await platform.privilege.isElevated()) && !(await platform.privilege.prepare())) {
       ui.err("admin authentication failed; --lid needs it");
       return 1;
     }
     try {
-      lid = await platform.lid.apply();
+      const snap = await platform.lid.snapshot();
+      lid = lidChanged(snap) ? snap : null;
+      snapshot = snap;
     } catch (e) {
       ui.err((e as Error).message);
       return 1;
     }
   }
 
-  // Written before the daemon exists so a crash between "lid applied" and
-  // "daemon running" still leaves the snapshot for the next reconcile.
+  const cli = cliPath();
+
+  // Written before set() touches the system, and before the daemon exists, so a
+  // crash anywhere after this point still leaves the snapshot for reconcile.
   const initial: State = {
     version: 1,
     pid: process.pid,
     startedAt: new Date().toISOString(),
     mode: daemon ? "daemon" : "foreground",
+    cli,
     options,
     holderPid: null,
     lid,
   };
   writeState(paths.state, initial);
 
-  if (!daemon) return runMonitor(ctx, "foreground");
+  if (snapshot) {
+    try {
+      await platform.lid.set(snapshot);
+    } catch (e) {
+      ui.err((e as Error).message);
+      await undo(ctx, platform, lid);
+      return 1;
+    }
+  }
+
+  if (!daemon) {
+    // state.json already names this process, so the lock has done its job; a
+    // foreground run lasts hours and must not block other commands.
+    releaseLock();
+    return runMonitor(ctx, "foreground");
+  }
 
   if (options.always && options.lid && options.for === null) {
     ui.warn("--always --lid -d with no --for: forgetting to stop keeps the laptop running in a bag. Consider --for 2h.");
   }
 
-  const cli = realpathSync(process.argv[1] ?? "");
   const win = process.platform === "win32";
   const fd = win ? null : openSync(paths.log, "a");
   let childPid: number | undefined;
@@ -114,7 +217,7 @@ export async function start(ctx: Ctx, options: Options, daemon: boolean): Promis
 }
 
 async function undo(ctx: Ctx, platform: Platform, lid: State["lid"]): Promise<void> {
-  if (lid) {
+  if (lidChanged(lid)) {
     try {
       await platform.lid.restore(lid);
     } catch (e) {

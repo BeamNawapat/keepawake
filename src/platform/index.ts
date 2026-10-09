@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import type { AutostartPort } from "../ports/autostart.js";
 import type { Exec } from "../ports/exec.js";
 import type { LidPort } from "../ports/lid.js";
@@ -28,15 +29,35 @@ export interface Platform {
   network: NetworkPort;
   privilege: PrivilegePort;
   autostart: AutostartPort;
-  /** True when `pid` is a live keepawake process (guards against pid reuse). */
-  isAlive(pid: number): Promise<boolean>;
+  /** True when `pid` is a live keepawake process of the given mode (guards against pid reuse). */
+  isAlive(pid: number, expect: AliveExpect): Promise<boolean>;
 }
 
-/** Our own command lines: `node cli.js __daemon`, `node cli.js start`, the keepawake bin. */
-const OURS = /__daemon|keepawake|cli\.(js|ts)/;
+export interface AliveExpect {
+  mode: "daemon" | "foreground";
+  /** realpath of the cli entry recorded in state.json. */
+  cli: string;
+}
+
+/** A symlinked bin shows up in ps under the link path, while state.json holds the realpath. */
+function sameFile(token: string, cli: string): boolean {
+  try {
+    return realpathSync(token) === cli;
+  } catch {
+    return false;
+  }
+}
+
+/** Exported for tests. Unknown argv counts as not ours: killing a stranger is worse than a stale state. */
+export function matchesArgv(args: string | undefined, expect: AliveExpect): boolean {
+  if (args === undefined || expect.cli === "") return false;
+  if (expect.mode === "daemon") return args.includes("__daemon") && args.includes(expect.cli);
+  if (!args.includes(" start")) return false;
+  return args.includes(expect.cli) || args.split(/\s+/).some((t) => sameFile(t, expect.cli));
+}
 
 function posixIsAlive(processes: ProcessLister) {
-  return async (pid: number): Promise<boolean> => {
+  return async (pid: number, expect: AliveExpect): Promise<boolean> => {
     if (!Number.isInteger(pid) || pid <= 0) return false;
     try {
       process.kill(pid, 0);
@@ -46,7 +67,7 @@ function posixIsAlive(processes: ProcessLister) {
     }
     const p = (await processes.list()).find((x) => x.pid === pid);
     if (!p) return false;
-    return p.args === undefined || OURS.test(p.args);
+    return matchesArgv(p.args, expect);
   };
 }
 
@@ -65,7 +86,7 @@ export function createPlatform(exec: Exec, opts: { lid?: boolean } = {}): Platfo
         network: createWin32Network(exec),
         privilege: createWin32Privilege(exec),
         autostart: createWin32Autostart(exec),
-        isAlive: (pid) => isAliveWin32(exec, pid),
+        isAlive: (pid, expect) => isAliveWin32(exec, pid, expect),
       };
     default: {
       const processes = createLinuxProcessLister(exec);
