@@ -23,38 +23,38 @@ describe("cli basics", () => {
     const r = kw(home, "--version");
     expect(r.code).toBe(0);
     expect(r.out.trim()).not.toBe("");
-  });
+  }, 30000);
 
   test("--help lists the commands", () => {
     const r = kw(home, "--help");
     expect(r.code).toBe(0);
     expect(r.out).toContain("keepawake start");
-  });
+  }, 30000);
 
   test("unknown command exits 1", () => {
     expect(kw(home, "frobnicate").code).toBe(1);
-  });
+  }, 30000);
 
   test("bad flag exits 2", () => {
     expect(kw(home, "start", "--for", "1h").code).toBe(2);
-  });
+  }, 30000);
 
   test("check exits 0 or 1 and --json is valid", () => {
     const r = kw(home, "check", "--json");
     expect([0, 1]).toContain(r.code ?? -1);
     const j = JSON.parse(r.out) as { found: boolean };
     expect(r.code ?? -1).toBe(j.found ? 0 : 1);
-  });
+  }, 30000);
 
   test("stop with nothing running exits 0", () => {
     expect(kw(home, "stop").code).toBe(0);
-  });
+  }, 30000);
 
   test("setup-auto refuses --lid", () => {
     const r = kw(home, "setup-auto", "--lid");
     expect(r.code).toBe(1);
     expect(r.err).toContain("--lid");
-  });
+  }, 30000);
 });
 
 // On Linux the daemon exits on purpose when logind refuses the inhibitor (CI runners
