@@ -35,12 +35,20 @@ jobs:
           registry-url: https://registry.npmjs.org
       # No token: npm exchanges the OIDC identity and adds provenance itself.
       - run: npm publish
-      # The website reads the CLI version from npm at build time, so rebuild it after
-      # every release. The hook URL is a Railway "Deploy Hook" stored as a repo secret;
-      # when the secret is absent the step is a no-op so forks still publish.
-      - name: Rebuild website
+
+  # The website shows the CLI version from a file that BeamNawapat/keepawake-site
+  # syncs from npm every 15 minutes. Dispatching that workflow now makes it immediate.
+  # Needs SITE_DISPATCH_TOKEN: a fine-grained PAT with Actions: write on keepawake-site.
+  # Without the secret the cron still catches up, so this job only warns.
+  rebuild-website:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch cli-version workflow on keepawake-site
         env:
-          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
-          if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then echo "no RAILWAY_DEPLOY_HOOK secret, skipping"; exit 0; fi
-          curl -fsS -X POST "$RAILWAY_DEPLOY_HOOK" -o /dev/null && echo "website rebuild triggered"
+          if [ -z "$GH_TOKEN" ]; then echo "::warning::no SITE_DISPATCH_TOKEN secret; the site updates on its 15-minute cron"; exit 0; fi
+          # npm can take a minute to serve the new dist-tag; give it a moment first.
+          sleep 60
+          gh workflow run cli-version.yml -R BeamNawapat/keepawake-site
