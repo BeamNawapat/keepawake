@@ -16,6 +16,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      # The tag you type into the GitHub Release must match package.json, or
+      # npm publishes a version nobody tagged (or refuses an existing one).
+      - name: Tag matches package.json version
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "package.json is $pkg but the release tag is $GITHUB_REF_NAME"; exit 1
+          fi
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun test
