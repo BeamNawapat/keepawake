@@ -1,5 +1,5 @@
 {
-  "name": "keepawake",
+  "name": "@beamnawapat/keepawake",
   "version": "0.1.0",
   "description": "Keep your computer awake while AI coding agents are working. macOS, Windows, Linux.",
   "type": "module",

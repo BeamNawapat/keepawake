@@ -1,6 +1,6 @@
 # keepawake
 
-[![npm](https://img.shields.io/npm/v/keepawake)](https://www.npmjs.com/package/keepawake)
+[![npm](https://img.shields.io/npm/v/%40beamnawapat%2Fkeepawake)](https://www.npmjs.com/package/@beamnawapat/keepawake)
 [![CI](https://github.com/BeamNawapat/keepawake/actions/workflows/ci.yml/badge.svg)](https://github.com/BeamNawapat/keepawake/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -17,12 +17,12 @@ It grew out of `keepawake-claude`, a 729-line bash script for macOS. This is a r
 ## Install
 
 ```sh
-npm i -g keepawake
+npm i -g @beamnawapat/keepawake
 # or run once without installing
-npx keepawake start
+npx @beamnawapat/keepawake start
 ```
 
-Needs Node 18.17 or newer. Both `keepawake` and `keepawake-claude` are installed as commands.
+Needs Node 18.17 or newer. The package is scoped because npm reserves the bare name `keepawake` (too close to `keep-awake`), but the commands it installs are still `keepawake` and `keepawake-claude`.
 
 ## Usage
 
@@ -153,7 +153,7 @@ A small state machine decides what to do on each poll: acquire the lock, release
 1. Stop the old daemon: `keepawake-claude stop`. Check with `pmset -g | grep SleepDisabled`; it should print `0`.
 2. If you installed the old LaunchAgent, unload it: `launchctl unload ~/Library/LaunchAgents/com.local.keepawake-claude.plist`.
 3. Remove the old script: `sudo rm /usr/local/bin/keepawake-claude`.
-4. Install the new one: `npm i -g keepawake`. The `keepawake-claude` command still exists and points to the new CLI.
+4. Install the new one: `npm i -g @beamnawapat/keepawake`. The `keepawake-claude` command still exists and points to the new CLI.
 
 Differences from v2.1:
 

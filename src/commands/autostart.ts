@@ -55,6 +55,6 @@ export async function uninstall(ctx: Ctx): Promise<number> {
     // missing or not empty
   }
   ui.info("Local data removed");
-  ui.dim("Remove the program itself with: npm rm -g keepawake");
+  ui.dim("Remove the program itself with: npm rm -g @beamnawapat/keepawake");
   return 0;
 }
