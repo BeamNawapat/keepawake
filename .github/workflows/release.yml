@@ -58,4 +58,4 @@ jobs:
             echo "npm latest is $got, waiting for $want ($i/30)"; sleep 10
           done
           [ "$got" = "$want" ] || echo "::warning::npm still serves $got after 5 minutes; dispatching anyway, the cron catches up"
-          gh workflow run cli-version.yml -R BeamNawapat/keepawake-site
+          gh workflow run cli-version.yml --ref main -R BeamNawapat/keepawake-site
