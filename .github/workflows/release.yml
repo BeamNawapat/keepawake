@@ -49,6 +49,13 @@ jobs:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then echo "::warning::no SITE_DISPATCH_TOKEN secret; the site updates on its 15-minute cron"; exit 0; fi
-          # npm can take a minute to serve the new dist-tag; give it a moment first.
-          sleep 60
+          # npm can take a few minutes to serve the new dist-tag. Dispatching before
+          # that makes the site sync a no-op (seen on v0.2.1), so poll first.
+          want="${GITHUB_REF_NAME#v}"; got=""
+          for i in $(seq 1 30); do
+            got=$(curl -fsS https://registry.npmjs.org/-/package/@beamnawapat%2Fkeepawake/dist-tags | jq -r .latest)
+            [ "$got" = "$want" ] && break
+            echo "npm latest is $got, waiting for $want ($i/30)"; sleep 10
+          done
+          [ "$got" = "$want" ] || echo "::warning::npm still serves $got after 5 minutes; dispatching anyway, the cron catches up"
           gh workflow run cli-version.yml -R BeamNawapat/keepawake-site
