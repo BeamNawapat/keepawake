@@ -35,3 +35,12 @@ jobs:
           registry-url: https://registry.npmjs.org
       # No token: npm exchanges the OIDC identity and adds provenance itself.
       - run: npm publish
+      # The website reads the CLI version from npm at build time, so rebuild it after
+      # every release. The hook URL is a Railway "Deploy Hook" stored as a repo secret;
+      # when the secret is absent the step is a no-op so forks still publish.
+      - name: Rebuild website
+        env:
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then echo "no RAILWAY_DEPLOY_HOOK secret, skipping"; exit 0; fi
+          curl -fsS -X POST "$RAILWAY_DEPLOY_HOOK" -o /dev/null && echo "website rebuild triggered"
