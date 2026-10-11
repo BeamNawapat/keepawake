@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-11
+
+### Changed
+
+- No code changes. First release published from GitHub Actions through npm trusted publishing, so this version carries provenance.
+
 ## [0.1.0] - 2026-10-11
 
 First release. Rewrite of `keepawake-claude` 2.1.0 (bash, macOS only).
@@ -37,4 +43,5 @@ First release. Rewrite of `keepawake-claude` 2.1.0 (bash, macOS only).
 - `status` read `disablesleep` from `pmset -g`, but macOS prints `SleepDisabled`, so the lid state was always wrong.
 - The old internet check used `ping -W 2`, which is 2 milliseconds on macOS, and failed constantly.
 
+[0.1.1]: https://github.com/BeamNawapat/keepawake/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BeamNawapat/keepawake/releases/tag/v0.1.0
