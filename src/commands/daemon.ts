@@ -7,6 +7,7 @@ import { createLogger } from "../core/logger.js";
 import type { Effect } from "../core/monitor.js";
 import { runLoop } from "../core/runner.js";
 import { readState, writeState, type State } from "../core/state.js";
+import { renderMascot, shouldShowMascot } from "../core/mascot.js";
 import { GLYPH } from "../core/ui.js";
 import { VERSION } from "../version.js";
 import type { Holder } from "../ports/power.js";
@@ -88,6 +89,11 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
   installCleanup(cleanup);
 
   if (mode === "foreground") {
+    if (shouldShowMascot(ctx.env, ui.isTTY, mode)) {
+      // header() opens with a blank line, which is the gap under the art.
+      ui.line("");
+      for (const l of renderMascot(ui.paint)) ui.line(l);
+    }
     ui.header(`keepawake v${VERSION}`);
     ui.info(`PID: ${process.pid}`);
     ui.info(`Check interval: ${opts.interval}s`);

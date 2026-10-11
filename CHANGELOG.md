@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A small ASCII ghost with a lantern above the foreground `start` banner. Terminal only, plain ASCII; hide it with `KEEPAWAKE_NO_MASCOT=1`.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added
