@@ -72,7 +72,7 @@ flags (start/restart/setup-auto):
   --no-apps           do not count GUI apps (Claude Desktop, Cursor, Kiro) as "working"
   -d, --daemon, --background
 
-env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, NO_COLOR
+env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, KEEPAWAKE_NO_UPDATE_CHECK=1, NO_COLOR
 ```
 <!-- /help -->
 
@@ -135,6 +135,11 @@ A small state machine decides what to do on each poll: acquire the lock, release
 - **`--lid`:** the previous setting is saved to `state.json` before any change and restored on `stop`. If the daemon crashes, `keepawake doctor --fix` restores it.
 - **Internet check:** a TCP connect to 1.1.1.1:443, then 8.8.8.8:53, with a 2 second timeout. No `ping`.
 - The log records agent labels only, never full command lines.
+
+## Update notice
+
+Interactive commands (`start`, `status`, `check`, `doctor`, `stop`, `restart`, `help`, `version`) print one dim line when a newer version is on npm. The answer is cached for 30 minutes in `~/.keepawake/update-check.json`, so most runs make no network call, and the lookup gives up after 1.5 seconds.
+It never runs in the background daemon, in pipes, or when `CI=true`. Turn it off with `KEEPAWAKE_NO_UPDATE_CHECK=1` (`NO_UPDATE_NOTIFIER=1` also works).
 
 ## Troubleshooting
 

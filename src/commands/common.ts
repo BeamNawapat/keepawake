@@ -14,6 +14,8 @@ export interface Ctx {
   ui: Ui;
   env: NodeJS.ProcessEnv;
   makePlatform(lid: boolean): Platform;
+  /** Called by a foreground run right after its banner; the update notice hangs off it. */
+  onBanner?: () => void;
 }
 
 export function createCtx(): Ctx {

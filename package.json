@@ -1,6 +1,6 @@
 {
   "name": "@beamnawapat/keepawake",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Keep your computer awake while AI coding agents are working. macOS, Windows, Linux.",
   "type": "module",
   "bin": {

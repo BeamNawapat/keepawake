@@ -8,6 +8,7 @@ export const GLYPH = {
   dish: "📡",
   wifi: "📶",
   key: "🔑",
+  up: "↑",
 } as const;
 
 export interface UiOptions {

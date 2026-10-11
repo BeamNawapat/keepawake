@@ -100,6 +100,7 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
     ui.line("");
     ui.dim("กด Ctrl+C เพื่อหยุด");
     ui.line("");
+    ctx.onBanner?.();
   }
   logger.log(
     `=== started (PID ${process.pid}, mode=${mode}, always=${opts.always}, lid=${opts.lid}, hotspot=${opts.hotspot ? "set" : "none"}, interval=${opts.interval}s) ===`,

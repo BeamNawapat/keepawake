@@ -9,6 +9,8 @@ export interface Paths {
   lock: string;
   log: string;
   logOld: string;
+  /** Last npm registry answer for the update notice. */
+  updateCheck: string;
 }
 
 /**
@@ -25,5 +27,6 @@ export function resolvePaths(env: NodeJS.ProcessEnv = process.env, home: string 
     lock: join(dir, "start.lock"),
     log: join(dir, "keepawake.log"),
     logOld: join(dir, "keepawake.log.old"),
+    updateCheck: join(dir, "update-check.json"),
   };
 }
