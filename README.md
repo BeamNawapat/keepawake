@@ -1,3 +1,5 @@
+<p align="center"><a href="https://keepawake.beamnawapat.com"><img src="https://raw.githubusercontent.com/BeamNawapat/keepawake/main/assets/banner.png" alt="keepawake: a small ghost night watchman holding a lantern" width="720"></a></p>
+
 # keepawake
 
 [![npm](https://img.shields.io/npm/v/%40beamnawapat%2Fkeepawake)](https://www.npmjs.com/package/@beamnawapat/keepawake)
@@ -175,3 +177,5 @@ See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md). Adding an agent is one r
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The mascot and wordmark are MIT like the code; the wordmark is set in IBM Plex Mono (SIL Open Font License).
