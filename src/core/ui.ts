@@ -19,8 +19,6 @@ export interface UiOptions {
 }
 
 export interface Ui {
-  /** True when stdout is a terminal (the flag createUi was built with). */
-  readonly isTTY: boolean;
   info(msg: string): void;
   warn(msg: string): void;
   err(msg: string): void;
@@ -50,7 +48,6 @@ export function createUi(opts?: Partial<UiOptions>): Ui {
   const bold = wrap("1");
 
   return {
-    isTTY: o.isTTY,
     info: (m) => o.out(`  ${green(GLYPH.ok)} ${m}`),
     warn: (m) => o.out(`  ${yellow(GLYPH.warn)} ${m}`),
     err: (m) => o.err(`  ${red(GLYPH.fail)} ${m}`),

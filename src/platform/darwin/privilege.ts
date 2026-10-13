@@ -17,12 +17,12 @@ export function createDarwinPrivilege(exec: Exec, deps: DarwinPrivilegeDeps = {}
       return (await exec.run("sudo", ["-n", "true"], { timeoutMs: 5000 })).code === 0;
     },
     async prepare() {
-      write(`  ${GLYPH.key} โหมด --lid ต้องใช้สิทธิ์ admin\n`);
-      write("  กรุณาใส่รหัสผ่าน Mac: ");
+      write(`  ${GLYPH.key} --lid needs admin rights\n`);
+      write("  Enter your Mac password: ");
       // sudo -v writes its own prompt to the tty, so it must inherit stdio rather than go through Exec.
       const code = await interactive("sudo", ["-v"]);
       if (code !== 0) return false;
-      write(`  ${GLYPH.ok} รหัสถูกต้อง — sudo พร้อมใช้\n`);
+      write(`  ${GLYPH.ok} password accepted, sudo is ready\n`);
       return true;
     },
   };

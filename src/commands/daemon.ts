@@ -7,7 +7,6 @@ import { createLogger } from "../core/logger.js";
 import type { Effect } from "../core/monitor.js";
 import { runLoop } from "../core/runner.js";
 import { readState, writeState, type State } from "../core/state.js";
-import { renderMascot, shouldShowMascot } from "../core/mascot.js";
 import { GLYPH } from "../core/ui.js";
 import { VERSION } from "../version.js";
 import type { Holder } from "../ports/power.js";
@@ -89,22 +88,17 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
   installCleanup(cleanup);
 
   if (mode === "foreground") {
-    if (shouldShowMascot(ctx.env, ui.isTTY, mode)) {
-      // header() opens with a blank line, which is the gap under the art.
-      ui.line("");
-      for (const l of renderMascot(ui.paint)) ui.line(l);
-    }
     ui.header(`keepawake v${VERSION}`);
     ui.info(`PID: ${process.pid}`);
     ui.info(`Check interval: ${opts.interval}s`);
     if (opts.always) ui.warn("Mode: always-on (no agent detection)");
-    if (opts.lid) ui.warn("Lid mode: ON  - ปิดฝาแล้วเครื่องยังทำงาน");
-    else ui.dim("Lid mode: off - ปิดฝาจะ sleep ตามปกติ");
-    if (opts.hotspot) ui.info(`Hotspot: ${ui.paint.yellow(opts.hotspot)} - เน็ตหลุดจะต่อ hotspot อัตโนมัติ`);
-    else ui.dim("Hotspot: off - ไม่ auto-connect");
+    if (opts.lid) ui.warn("Lid mode: ON  - keeps running with the lid closed");
+    else ui.dim("Lid mode: off - closing the lid sleeps as usual");
+    if (opts.hotspot) ui.info(`Hotspot: ${ui.paint.yellow(opts.hotspot)} - reconnects if the network drops`);
+    else ui.dim("Hotspot: off - no auto-reconnect");
     ui.info(`Log: ${paths.log}`);
     ui.line("");
-    ui.dim("กด Ctrl+C เพื่อหยุด");
+    ui.dim("Press Ctrl+C to stop");
     ui.line("");
     ctx.onBanner?.();
   }
@@ -151,7 +145,7 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
       }
       case "connect-hotspot": {
         if (effect.firstAttempt) {
-          show(`  ${GLYPH.dish} เน็ตหลุด -> กำลังต่อ ${effect.ssid}...`);
+          show(`  ${GLYPH.dish} network down -> connecting to ${effect.ssid}...`);
           logger.log("internet down -> connecting to the configured hotspot");
         }
         const ok = await platform.network.connectWifi(effect.ssid);
@@ -159,7 +153,7 @@ export async function runMonitor(ctx: Ctx, mode: "foreground" | "daemon"): Promi
         return;
       }
       case "hotspot-restored":
-        show(`  ${GLYPH.wifi} ต่อ ${effect.ssid} สำเร็จ - เน็ตกลับมาแล้ว`);
+        show(`  ${GLYPH.wifi} connected to ${effect.ssid} - network is back`);
         logger.log("internet is back after hotspot attempt");
         return;
       case "expire":

@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-10-14
+
+### Changed
+
+- All banner, sudo prompt and hotspot messages are in English. A few lines were still in Thai, carried over from the original `keepawake-claude` script.
+
+### Removed
+
+- The ASCII ghost in the `start` banner from 0.2.1, and the `KEEPAWAKE_NO_MASCOT` variable with it. The banner is back to the plain header.
+
 ## [0.2.1] - 2026-10-11
 
 ### Added

@@ -74,7 +74,7 @@ flags (start/restart/setup-auto):
   --no-apps           do not count GUI apps (Claude Desktop, Cursor, Kiro) as "working"
   -d, --daemon, --background
 
-env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, KEEPAWAKE_NO_UPDATE_CHECK=1, KEEPAWAKE_NO_MASCOT=1, NO_COLOR
+env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, KEEPAWAKE_NO_UPDATE_CHECK=1, NO_COLOR
 ```
 <!-- /help -->
 
@@ -92,9 +92,6 @@ env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, KEEPAWAKE_NO_
 | `-d`, `--daemon`, `--background` | Detach and run in the background. |
 
 `KEEPAWAKE_IGNORE=cursor,aider` skips those agent ids during detection.
-
-The start banner shows a small ASCII mascot on a terminal.
-Set KEEPAWAKE_NO_MASCOT=1 to hide it.
 
 State lives in `~/.keepawake/` (or `$KEEPAWAKE_HOME`): `daemon.pid`, `state.json`, `keepawake.log`.
 

@@ -21,5 +21,5 @@ flags (start/restart/setup-auto):
   --no-apps           do not count GUI apps (Claude Desktop, Cursor, Kiro) as "working"
   -d, --daemon, --background
 
-env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, KEEPAWAKE_NO_UPDATE_CHECK=1, KEEPAWAKE_NO_MASCOT=1, NO_COLOR
+env: KEEPAWAKE_HOME, KEEPAWAKE_INTERVAL, KEEPAWAKE_IGNORE=<id,id>, KEEPAWAKE_NO_UPDATE_CHECK=1, NO_COLOR
 `;

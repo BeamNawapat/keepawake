@@ -29,8 +29,8 @@ describe("darwin privilege prompt", () => {
     const priv = createDarwinPrivilege(fakeExec(), { interactive: async () => 0, write: (t) => out.push(t) });
     expect(await priv.prepare()).toBe(true);
     const text = out.join("");
-    expect(text.match(/โหมด --lid ต้องใช้สิทธิ์ admin/g)).toHaveLength(1);
-    expect(text).toContain("✔ รหัสถูกต้อง — sudo พร้อมใช้");
+    expect(text.match(/--lid needs admin rights/g)).toHaveLength(1);
+    expect(text).toContain("✔ password accepted, sudo is ready");
   });
 });
 
@@ -86,7 +86,7 @@ describe("darwin lid", () => {
       "sudo authentication failed",
     );
     expect(asked).toEqual([["sudo", "-v"]]);
-    expect(out.join("")).toContain("โหมด --lid ต้องใช้สิทธิ์ admin");
+    expect(out.join("")).toContain("--lid needs admin rights");
     expect(exec.calls).not.toContain("sudo -n pmset -a disablesleep 1");
   });
 });
